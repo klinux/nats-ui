@@ -12,6 +12,7 @@ export interface StreamInfo {
   replicas: number;
   created: Date;
   consumers: number;
+  sealed: boolean;
   mirror?: string;
   sources?: string[];
 }
@@ -37,6 +38,7 @@ export function convertJetStreamData(jsData: Record<string, unknown>): StreamInf
     replicas: (config.num_replicas as number) || 1,
     created: new Date((jsData.created as string | number) || Date.now()),
     consumers: (state.consumer_count as number) || 0,
+    sealed: !!(config.sealed),
     mirror: mirror?.name as string | undefined,
     sources: sources?.map((s) => s.name as string),
   };

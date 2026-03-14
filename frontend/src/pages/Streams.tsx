@@ -76,7 +76,7 @@ export function Streams() {
         config.sources = data.sources.split(',').map((s) => ({ name: s.trim() }));
       }
 
-      await connection.jetstream.createStream(config);
+      await connection.jetstream.createStream(config as Parameters<typeof connection.jetstream.createStream>[0]);
       setIsCreateOpen(false);
       toast.success(`Stream ${data.name} created successfully`);
       await fetchStreams();
@@ -221,7 +221,7 @@ export function Streams() {
         onImportStream={handleImportStream}
       />
 
-      <StreamDetail stream={selectedStream} onClose={() => setSelectedStream(null)} />
+      <StreamDetail stream={selectedStream} onClose={() => setSelectedStream(null)} onRefresh={() => fetchStreams()} />
       <MessageBrowser streamName={messagesStream} onClose={() => setMessagesStream(null)} />
       <CreateStreamDialog open={isCreateOpen} onOpenChange={setIsCreateOpen} onSubmit={handleCreateStream} />
     </div>

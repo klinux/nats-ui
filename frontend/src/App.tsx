@@ -18,6 +18,8 @@ import { ObjectStore } from './pages/ObjectStore';
 import { Monitoring } from './pages/Monitoring';
 import { Cluster } from './pages/Cluster';
 import { Settings } from './pages/Settings';
+import { SystemEvents } from './pages/SystemEvents';
+import { Benchmark } from './pages/Benchmark';
 import { Login } from './pages/Login';
 
 const queryClient = new QueryClient({
@@ -67,6 +69,8 @@ function App() {
                   <Route path="object-store" element={<ObjectStore />} />
                   <Route path="monitoring" element={<Monitoring />} />
                   <Route path="cluster" element={<Cluster />} />
+                  <Route path="system-events" element={<SystemEvents />} />
+                  <Route path="benchmark" element={<Benchmark />} />
                   <Route path="settings" element={<Settings />} />
                 </Route>
               </Routes>

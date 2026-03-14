@@ -46,7 +46,7 @@ export function RequestReplyPanel({ topic, isExpanded, onToggle }: RequestReplyP
   const [isLoading, setIsLoading] = useState(false);
 
   const form = useForm<RequestFormData>({
-    resolver: zodResolver(requestSchema),
+    resolver: zodResolver(requestSchema) as never,
     defaultValues: { data: '', headers: '', timeout: 5000 },
   });
 

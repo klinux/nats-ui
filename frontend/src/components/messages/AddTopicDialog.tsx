@@ -42,7 +42,7 @@ export function AddTopicDialog({ open, onOpenChange, onAdd }: AddTopicDialogProp
           <Label htmlFor="topic-name">Topic Name</Label>
           <Input
             id="topic-name"
-            placeholder="e.g., orders.created, events.>"
+            placeholder="e.g., orders.> or events.*"
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); }}

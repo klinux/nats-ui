@@ -37,7 +37,7 @@ export function CreateBucketDialog({
   onSubmit,
 }: CreateBucketDialogProps) {
   const form = useForm<CreateBucketFormData>({
-    resolver: zodResolver(bucketSchema),
+    resolver: zodResolver(bucketSchema) as never,
     defaultValues: { name: '', description: '', max_bytes: undefined, ttl: undefined },
   });
 

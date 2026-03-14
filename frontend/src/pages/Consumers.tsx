@@ -60,6 +60,7 @@ export function Consumers() {
   const [consumerToDelete, setConsumerToDelete] = useState<{ name: string; stream: string } | null>(null);
   const [showBlur, setShowBlur] = useState(false);
   const tableContainerRef = useRef<HTMLDivElement>(null);
+  const prevPendingRef = useRef<Map<string, number>>(new Map());
 
   const fetchConsumers = useCallback(async () => {
     if (!isConnected || !connection) return;
@@ -78,7 +79,19 @@ export function Consumers() {
         console.warn('JetStream API not available, using HTTP monitoring API');
         data = await fetchAllConsumers();
       }
-      setConsumers(data.map(convertJetStreamConsumer));
+      const converted = data.map(convertJetStreamConsumer);
+      // Check lag thresholds and notify
+      const prev = prevPendingRef.current;
+      for (const c of converted) {
+        const prevPending = prev.get(c.name) ?? 0;
+        if (c.pending >= 10000 && prevPending < 10000) {
+          toast.error(`Consumer "${c.name}" lag critical: ${c.pending.toLocaleString()} pending`, { duration: 8000 });
+        } else if (c.pending >= 1000 && prevPending < 1000) {
+          toast.warning(`Consumer "${c.name}" lag high: ${c.pending.toLocaleString()} pending`, { duration: 5000 });
+        }
+        prev.set(c.name, c.pending);
+      }
+      setConsumers(converted);
     } catch (error) {
       console.error('Failed to fetch consumers:', error);
       toast.error('Failed to fetch consumers');
@@ -245,18 +258,10 @@ export function Consumers() {
 }
 
 function SummaryCard({ title, icon, value, subtitle }: { title: string; icon: React.ReactNode; value: number; subtitle: string }) {
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        {icon}
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{value.toLocaleString()}</div>
-        <p className="text-xs text-muted-foreground">{subtitle}</p>
-      </CardContent>
-    </Card>
-  );
+  return (<Card>
+    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">{title}</CardTitle>{icon}</CardHeader>
+    <CardContent><div className="text-2xl font-bold">{value.toLocaleString()}</div><p className="text-xs text-muted-foreground">{subtitle}</p></CardContent>
+  </Card>);
 }
 
 function DeleteConsumerButton({ consumer, consumerToDelete, onRequestDelete, onConfirmDelete }: {

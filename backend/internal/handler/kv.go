@@ -2,6 +2,9 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -210,4 +213,67 @@ func (h *KVHandler) DeleteKey(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"deleted": key})
+}
+
+// WatchKeys uses Server-Sent Events to stream KV bucket changes
+func (h *KVHandler) WatchKeys(c *gin.Context) {
+	bucket := c.Param("bucket")
+	key := c.DefaultQuery("key", ">")
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Minute)
+	defer cancel()
+
+	kv, err := h.nc.JS().KeyValue(ctx, bucket)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	watcher, err := kv.Watch(ctx, key)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	defer watcher.Stop()
+
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("X-Accel-Buffering", "no")
+
+	flusher, _ := c.Writer.(http.Flusher)
+
+	c.Stream(func(w io.Writer) bool {
+		select {
+		case entry := <-watcher.Updates():
+			if entry == nil {
+				return true
+			}
+			data, err := json.Marshal(gin.H{
+				"key":       entry.Key(),
+				"value":     string(entry.Value()),
+				"revision":  entry.Revision(),
+				"operation": entry.Operation().String(),
+				"created":   entry.Created(),
+			})
+			if err != nil {
+				fmt.Fprintf(w, "data: {\"error\":\"marshal failed\"}\n\n")
+				if flusher != nil {
+					flusher.Flush()
+				}
+				return true
+			}
+			fmt.Fprintf(w, "data: %s\n\n", data)
+			if flusher != nil {
+				flusher.Flush()
+			}
+			return true
+
+		case <-ctx.Done():
+			return false
+
+		case <-c.Request.Context().Done():
+			return false
+		}
+	})
 }

@@ -1,6 +1,8 @@
 import { Outlet, useLocation } from 'react-router-dom';
 import {
+  Activity,
   Database,
+  Gauge,
   Home,
   MessageSquare,
   Network,
@@ -35,6 +37,7 @@ import { Badge } from '../ui/badge';
 import { NavMain, type NavItem } from './nav-main';
 import { NavUser } from './nav-user';
 import { useNats } from '../../hooks/useNats';
+import { CommandPalette } from '../command-palette/CommandPalette';
 
 const navItems: NavItem[] = [
   { title: 'Dashboard', path: '/', icon: Home },
@@ -48,6 +51,8 @@ const navItems: NavItem[] = [
 const systemItems: NavItem[] = [
   { title: 'Monitoring', path: '/monitoring', icon: Monitor },
   { title: 'Cluster', path: '/cluster', icon: Network },
+  { title: 'System Events', path: '/system-events', icon: Activity },
+  { title: 'Benchmark', path: '/benchmark', icon: Gauge },
   { title: 'Settings', path: '/settings', icon: Settings },
 ];
 
@@ -161,6 +166,7 @@ export function MainLayout() {
           <Outlet />
         </div>
       </SidebarInset>
+      <CommandPalette />
     </SidebarProvider>
   );
 }

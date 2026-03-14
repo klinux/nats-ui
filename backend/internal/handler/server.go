@@ -1,7 +1,11 @@
 package handler
 
 import (
+	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -126,4 +130,65 @@ func (h *ServerHandler) ServerVarz(c *gin.Context) {
 		return
 	}
 	c.Data(http.StatusOK, "application/json", data)
+}
+
+func (h *ServerHandler) HealthCheck(c *gin.Context) {
+	data, err := h.nc.FetchMonitoring("/healthz")
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	c.Data(http.StatusOK, "application/json", data)
+}
+
+// SystemEvents uses Server-Sent Events to stream NATS system events
+func (h *ServerHandler) SystemEvents(c *gin.Context) {
+	subject := c.DefaultQuery("subject", "$SYS.>")
+
+	sub, ch, err := h.nc.Subscribe(subject)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	defer sub.Unsubscribe()
+
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("X-Accel-Buffering", "no")
+
+	flusher, _ := c.Writer.(http.Flusher)
+
+	c.Stream(func(w io.Writer) bool {
+		select {
+		case msg := <-ch:
+			data, err := json.Marshal(gin.H{
+				"subject":   msg.Subject,
+				"data":      string(msg.Data),
+				"timestamp": time.Now().UnixMilli(),
+			})
+			if err != nil {
+				fmt.Fprintf(w, "data: {\"error\":\"marshal failed\"}\n\n")
+				if flusher != nil {
+					flusher.Flush()
+				}
+				return true
+			}
+			fmt.Fprintf(w, "data: %s\n\n", data)
+			if flusher != nil {
+				flusher.Flush()
+			}
+			return true
+
+		case <-c.Request.Context().Done():
+			return false
+
+		case <-time.After(30 * time.Second):
+			fmt.Fprintf(w, ": keepalive\n\n")
+			if flusher != nil {
+				flusher.Flush()
+			}
+			return true
+		}
+	})
 }

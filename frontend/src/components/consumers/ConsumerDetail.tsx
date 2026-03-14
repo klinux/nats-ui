@@ -1,12 +1,15 @@
 import { useState, useCallback } from 'react';
-import { Users, Pause, Play } from 'lucide-react';
+import { Users, Pause, Play, Download } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
 import { toast } from 'sonner';
 import { pauseConsumer, resumeConsumer } from '../../services/api-client';
+import { fetchNextMessages, type PulledMessage } from '../../services/api-client-extended';
 
 export interface Consumer {
   name: string;
@@ -54,6 +57,9 @@ function getLagBadgeVariant(pending: number): 'default' | 'secondary' | 'destruc
 
 export function ConsumerDetail({ consumer, onClose, onRefresh, getActivityStatus }: ConsumerDetailProps) {
   const [loading, setLoading] = useState(false);
+  const [batchSize, setBatchSize] = useState(1);
+  const [pulledMessages, setPulledMessages] = useState<PulledMessage[]>([]);
+  const [pulling, setPulling] = useState(false);
 
   const handlePause = useCallback(async () => {
     setLoading(true);
@@ -81,13 +87,28 @@ export function ConsumerDetail({ consumer, onClose, onRefresh, getActivityStatus
     }
   }, [consumer.stream, consumer.name, onRefresh]);
 
+  const handlePull = useCallback(async () => {
+    setPulling(true);
+    try {
+      const msgs = await fetchNextMessages(consumer.stream, consumer.name, batchSize);
+      setPulledMessages(msgs);
+      if (msgs.length === 0) {
+        toast.info('No messages available');
+      }
+    } catch (err) {
+      toast.error(`Failed to pull messages: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setPulling(false);
+    }
+  }, [consumer.stream, consumer.name, batchSize]);
+
   const activity = getActivityStatus(consumer.lastActivity);
   const lagColor = getLagColor(consumer.pending);
   const lagLabel = getLagLabel(consumer.pending);
 
   return (
     <Dialog open onOpenChange={() => onClose()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Users className="h-5 w-5" />
@@ -104,59 +125,18 @@ export function ConsumerDetail({ consumer, onClose, onRefresh, getActivityStatus
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Metrics Grid */}
-          <div className="grid grid-cols-5 gap-3">
-            <MetricCard label="Delivered" value={consumer.delivered} />
-            <MetricCard label="Acknowledged" value={consumer.acknowledged} />
-            <MetricCard label="Pending" value={consumer.pending} className="text-yellow-600" />
-            <MetricCard label="Redelivered" value={consumer.redelivered} className="text-red-600" />
-            <MetricCard label="Waiting" value={consumer.numWaiting} />
-          </div>
+          <MetricsGrid consumer={consumer} />
+          <LagIndicator lagColor={lagColor} lagLabel={lagLabel} pending={consumer.pending} />
+          <ConfigAndTimestamps consumer={consumer} activity={activity} />
 
-          {/* Lag Indicator */}
-          <div className="flex items-center gap-3 p-3 rounded-lg border">
-            <div className={`w-3 h-3 rounded-full ${lagColor}`} />
-            <span className="text-sm font-medium">Consumer Lag:</span>
-            <Badge variant={getLagBadgeVariant(consumer.pending)}>{lagLabel}</Badge>
-            <span className="text-sm text-muted-foreground ml-auto">
-              {consumer.pending.toLocaleString()} pending messages
-            </span>
-          </div>
-
-          {/* Configuration & Stats */}
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Configuration</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <DetailRow label="Stream" value={<Badge variant="outline">{consumer.stream}</Badge>} />
-                <DetailRow label="Subject" value={consumer.subject} />
-                <DetailRow label="Deliver Policy" value={consumer.deliverPolicy} />
-                <DetailRow label="Ack Policy" value={consumer.ackPolicy} />
-                <DetailRow label="Max Deliver" value={String(consumer.maxDeliver)} />
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Timestamps</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <DetailRow label="Created" value={consumer.created.toLocaleDateString()} />
-                <DetailRow label="Last Activity" value={consumer.lastActivity.toLocaleString()} />
-                <DetailRow
-                  label="Status"
-                  value={
-                    <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${consumer.isActive ? activity.color : 'bg-red-500'}`} />
-                      <span className="text-sm">{consumer.isActive ? 'Active' : 'Stopped'}</span>
-                    </div>
-                  }
-                />
-              </CardContent>
-            </Card>
-          </div>
+          {/* Pull Messages */}
+          <PullMessagesSection
+            batchSize={batchSize}
+            onBatchSizeChange={setBatchSize}
+            onPull={handlePull}
+            pulling={pulling}
+            messages={pulledMessages}
+          />
 
           {/* Actions */}
           <div className="flex items-center gap-3 pt-4 border-t">
@@ -175,6 +155,126 @@ export function ConsumerDetail({ consumer, onClose, onRefresh, getActivityStatus
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function MetricsGrid({ consumer }: { consumer: Consumer }) {
+  return (
+    <div className="grid grid-cols-5 gap-3">
+      <MetricCard label="Delivered" value={consumer.delivered} />
+      <MetricCard label="Acknowledged" value={consumer.acknowledged} />
+      <MetricCard label="Pending" value={consumer.pending} className="text-yellow-600" />
+      <MetricCard label="Redelivered" value={consumer.redelivered} className="text-red-600" />
+      <MetricCard label="Waiting" value={consumer.numWaiting} />
+    </div>
+  );
+}
+
+function LagIndicator({ lagColor, lagLabel, pending }: { lagColor: string; lagLabel: string; pending: number }) {
+  return (
+    <div className="flex items-center gap-3 p-3 rounded-lg border">
+      <div className={`w-3 h-3 rounded-full ${lagColor}`} />
+      <span className="text-sm font-medium">Consumer Lag:</span>
+      <Badge variant={getLagBadgeVariant(pending)}>{lagLabel}</Badge>
+      <span className="text-sm text-muted-foreground ml-auto">
+        {pending.toLocaleString()} pending messages
+      </span>
+    </div>
+  );
+}
+
+function ConfigAndTimestamps({ consumer, activity }: { consumer: Consumer; activity: { status: string; color: string } }) {
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Configuration</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <DetailRow label="Stream" value={<Badge variant="outline">{consumer.stream}</Badge>} />
+          <DetailRow label="Subject" value={consumer.subject} />
+          <DetailRow label="Deliver Policy" value={consumer.deliverPolicy} />
+          <DetailRow label="Ack Policy" value={consumer.ackPolicy} />
+          <DetailRow label="Max Deliver" value={String(consumer.maxDeliver)} />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Timestamps</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <DetailRow label="Created" value={consumer.created.toLocaleDateString()} />
+          <DetailRow label="Last Activity" value={consumer.lastActivity.toLocaleString()} />
+          <DetailRow
+            label="Status"
+            value={
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${consumer.isActive ? activity.color : 'bg-red-500'}`} />
+                <span className="text-sm">{consumer.isActive ? 'Active' : 'Stopped'}</span>
+              </div>
+            }
+          />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function PullMessagesSection({
+  batchSize, onBatchSizeChange, onPull, pulling, messages,
+}: {
+  batchSize: number;
+  onBatchSizeChange: (v: number) => void;
+  onPull: () => void;
+  pulling: boolean;
+  messages: PulledMessage[];
+}) {
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <Download className="h-4 w-4" /> Pull Messages
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex items-end gap-3">
+          <div className="space-y-1">
+            <Label htmlFor="batch-size" className="text-xs">Batch Size</Label>
+            <Input
+              id="batch-size"
+              type="number"
+              min={1}
+              max={100}
+              value={batchSize}
+              onChange={(e) => onBatchSizeChange(Math.min(100, Math.max(1, Number(e.target.value) || 1)))}
+              className="w-24 h-8"
+            />
+          </div>
+          <Button size="sm" onClick={onPull} disabled={pulling}>
+            <Download className="mr-2 h-4 w-4" />
+            {pulling ? 'Fetching...' : 'Fetch Next'}
+          </Button>
+        </div>
+        {messages.length > 0 && (
+          <div className="max-h-48 overflow-y-auto space-y-2">
+            {messages.map((msg, i) => (
+              <div key={i} className="p-2 rounded border text-xs space-y-1">
+                <div className="flex items-center justify-between">
+                  <Badge variant="outline" className="text-[10px]">seq: {msg.sequence}</Badge>
+                  <span className="font-mono text-muted-foreground">{msg.subject}</span>
+                  <span className="text-muted-foreground">
+                    {new Date(msg.timestamp).toLocaleTimeString()}
+                  </span>
+                </div>
+                <pre className="text-xs bg-muted p-1 rounded overflow-x-auto">
+                  {typeof msg.data === 'string' ? msg.data : JSON.stringify(msg.data, null, 2)}
+                </pre>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

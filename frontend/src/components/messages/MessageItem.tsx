@@ -8,7 +8,6 @@ import {
 
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
-import { Label } from '../ui/label';
 import { JsonViewer } from '../ui/json-viewer';
 import {
   DropdownMenu,

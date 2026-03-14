@@ -39,6 +39,7 @@ func main() {
 	kvH := handler.NewKVHandler(nc)
 	objH := handler.NewObjectStoreHandler(nc)
 	messagesH := handler.NewMessagesHandler(nc)
+	benchH := handler.NewBenchHandler(nc)
 
 	// Router
 	if os.Getenv("GIN_MODE") == "" {
@@ -95,6 +96,8 @@ func main() {
 		protected.GET("/server/accounts", serverH.Accounts)
 		protected.GET("/server/accounts/:account", validateAccount, serverH.AccountDetail)
 		protected.GET("/server/varz", serverH.ServerVarz)
+		protected.GET("/server/healthz", serverH.HealthCheck)
+		protected.GET("/server/events", serverH.SystemEvents)
 
 		// Streams
 		protected.GET("/streams", streamsH.List)
@@ -103,6 +106,7 @@ func main() {
 		protected.PUT("/streams/:name", validateName, streamsH.Update)
 		protected.DELETE("/streams/:name", validateName, streamsH.Delete)
 		protected.POST("/streams/:name/purge", validateName, streamsH.Purge)
+		protected.POST("/streams/:name/seal", validateName, streamsH.Seal)
 		protected.GET("/streams/:name/messages", validateName, streamsH.GetMessage)
 
 		// Consumers
@@ -112,6 +116,7 @@ func main() {
 		protected.DELETE("/streams/:name/consumers/:consumer", validateName, validateConsumer, consumersH.Delete)
 		protected.POST("/streams/:name/consumers/:consumer/pause", validateName, validateConsumer, consumersH.Pause)
 		protected.POST("/streams/:name/consumers/:consumer/resume", validateName, validateConsumer, consumersH.Resume)
+		protected.POST("/streams/:name/consumers/:consumer/next", validateName, validateConsumer, consumersH.NextMessage)
 
 		// KV Store
 		protected.GET("/kv", kvH.ListBuckets)
@@ -121,6 +126,7 @@ func main() {
 		protected.GET("/kv/:bucket/keys/:key", validateBucket, kvH.GetValue)
 		protected.PUT("/kv/:bucket/keys/:key", validateBucket, kvH.PutValue)
 		protected.DELETE("/kv/:bucket/keys/:key", validateBucket, kvH.DeleteKey)
+		protected.GET("/kv/:bucket/watch", validateBucket, kvH.WatchKeys)
 
 		// Object Store
 		protected.GET("/objectstore", objH.ListBuckets)
@@ -138,6 +144,9 @@ func main() {
 		protected.POST("/messages/request", messagesH.RequestReply)
 		protected.GET("/messages/subscribe", messagesH.Subscribe)
 		protected.GET("/messages/subjects", messagesH.ActiveSubjects)
+
+		// Benchmark
+		protected.POST("/bench", benchH.Run)
 	}
 
 	// Serve frontend static files

@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -136,7 +135,7 @@ func discoverOIDC(issuerURL string, p *OAuth2Provider) error {
 	return nil
 }
 
-// ListProviders returns enabled OAuth2 providers (without secrets)
+// ListProviders returns enabled OAuth2 providers (without secrets).
 func (h *OAuth2Handler) ListProviders(c *gin.Context) {
 	var providers []map[string]string
 	for name, p := range h.providers {
@@ -151,7 +150,7 @@ func (h *OAuth2Handler) ListProviders(c *gin.Context) {
 	c.JSON(http.StatusOK, providers)
 }
 
-// Authorize redirects to the OAuth2 provider
+// Authorize redirects to the OAuth2 provider.
 func (h *OAuth2Handler) Authorize(c *gin.Context) {
 	provider := c.Param("provider")
 	p, ok := h.providers[provider]
@@ -176,7 +175,7 @@ func (h *OAuth2Handler) Authorize(c *gin.Context) {
 	c.Redirect(http.StatusTemporaryRedirect, authURL)
 }
 
-// Callback handles the OAuth2 callback
+// Callback handles the OAuth2 callback.
 func (h *OAuth2Handler) Callback(c *gin.Context) {
 	provider := c.Param("provider")
 	p, ok := h.providers[provider]
@@ -213,7 +212,7 @@ func (h *OAuth2Handler) Callback(c *gin.Context) {
 		return
 	}
 
-	// Check if user is allowed (for now, any authenticated OAuth2 user)
+	// Check if user is allowed
 	if !h.cfg.IsAllowedOAuth2User(email) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "user not authorized"})
 		return
@@ -228,118 +227,6 @@ func (h *OAuth2Handler) Callback(c *gin.Context) {
 
 	// Redirect to frontend with token
 	c.Redirect(http.StatusTemporaryRedirect, "/?token="+url.QueryEscape(token))
-}
-
-func exchangeCode(p *OAuth2Provider, code, redirectURI string) (string, error) {
-	data := url.Values{
-		"client_id":     {p.ClientID},
-		"client_secret": {p.ClientSecret},
-		"code":          {code},
-		"redirect_uri":  {redirectURI},
-		"grant_type":    {"authorization_code"},
-	}
-
-	req, err := http.NewRequest("POST", p.TokenURL, strings.NewReader(data.Encode()))
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := oauth2HTTPClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("read token response: %w", err)
-	}
-
-	var result map[string]any
-	if err := json.Unmarshal(body, &result); err != nil {
-		return "", fmt.Errorf("parse token response: %w", err)
-	}
-
-	token, ok := result["access_token"].(string)
-	if !ok {
-		return "", fmt.Errorf("no access_token in response: %s", string(body))
-	}
-	return token, nil
-}
-
-func getUserEmail(p *OAuth2Provider, accessToken string) (string, error) {
-	req, err := http.NewRequest("GET", p.UserInfoURL, nil)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := oauth2HTTPClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("read userinfo response: %w", err)
-	}
-
-	var result map[string]any
-	if err := json.Unmarshal(body, &result); err != nil {
-		return "", err
-	}
-
-	email, ok := result[p.EmailField].(string)
-	if !ok || email == "" {
-		// GitHub may not expose email in profile, try emails endpoint
-		if p.Name == "github" {
-			return getGitHubEmail(accessToken)
-		}
-		return "", fmt.Errorf("no email in userinfo response")
-	}
-	return email, nil
-}
-
-func getGitHubEmail(accessToken string) (string, error) {
-	req, err := http.NewRequest("GET", "https://api.github.com/user/emails", nil)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := oauth2HTTPClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	var emails []struct {
-		Email    string `json:"email"`
-		Primary  bool   `json:"primary"`
-		Verified bool   `json:"verified"`
-	}
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("read github emails response: %w", err)
-	}
-	if err := json.Unmarshal(body, &emails); err != nil {
-		return "", err
-	}
-
-	for _, e := range emails {
-		if e.Primary && e.Verified {
-			return e.Email, nil
-		}
-	}
-	if len(emails) > 0 {
-		return emails[0].Email, nil
-	}
-	return "", fmt.Errorf("no email found")
 }
 
 func generateState() string {
