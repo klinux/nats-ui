@@ -31,9 +31,11 @@ dist-ssr
 # Go
 backend/tmp/
 backend/bin/
+backend/server
 
 # Dev logs and PIDs
 .dev-logs/
+.pid-*
 
 # Claude Code project instructions
 CLAUDE.md
