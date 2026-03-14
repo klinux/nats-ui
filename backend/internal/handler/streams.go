@@ -78,6 +78,36 @@ type createStreamRequest struct {
 	Replicas    int      `json:"replicas"`
 }
 
+func (req *createStreamRequest) toStreamConfig() jetstream.StreamConfig {
+	cfg := jetstream.StreamConfig{
+		Name:        req.Name,
+		Subjects:    req.Subjects,
+		Description: req.Description,
+		MaxMsgs:     req.MaxMsgs,
+		MaxBytes:    req.MaxBytes,
+		MaxAge:      time.Duration(req.MaxAge) * time.Second,
+		Replicas:    req.Replicas,
+	}
+	switch req.Retention {
+	case "interest":
+		cfg.Retention = jetstream.InterestPolicy
+	case "workqueue":
+		cfg.Retention = jetstream.WorkQueuePolicy
+	default:
+		cfg.Retention = jetstream.LimitsPolicy
+	}
+	switch req.Storage {
+	case "memory":
+		cfg.Storage = jetstream.MemoryStorage
+	default:
+		cfg.Storage = jetstream.FileStorage
+	}
+	if cfg.Replicas == 0 {
+		cfg.Replicas = 1
+	}
+	return cfg
+}
+
 func (h *StreamsHandler) Create(c *gin.Context) {
 	var req createStreamRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -88,37 +118,7 @@ func (h *StreamsHandler) Create(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
-	cfg := jetstream.StreamConfig{
-		Name:        req.Name,
-		Subjects:    req.Subjects,
-		Description: req.Description,
-		MaxMsgs:     req.MaxMsgs,
-		MaxBytes:    req.MaxBytes,
-		MaxAge:      time.Duration(req.MaxAge) * time.Second,
-		Replicas:    req.Replicas,
-	}
-
-	switch req.Retention {
-	case "interest":
-		cfg.Retention = jetstream.InterestPolicy
-	case "workqueue":
-		cfg.Retention = jetstream.WorkQueuePolicy
-	default:
-		cfg.Retention = jetstream.LimitsPolicy
-	}
-
-	switch req.Storage {
-	case "memory":
-		cfg.Storage = jetstream.MemoryStorage
-	default:
-		cfg.Storage = jetstream.FileStorage
-	}
-
-	if cfg.Replicas == 0 {
-		cfg.Replicas = 1
-	}
-
-	stream, err := h.nc.JS().CreateStream(ctx, cfg)
+	stream, err := h.nc.JS().CreateStream(ctx, req.toStreamConfig())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -145,40 +145,9 @@ func (h *StreamsHandler) Update(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
-	name := c.Param("name")
-	req.Name = name
+	req.Name = c.Param("name")
 
-	cfg := jetstream.StreamConfig{
-		Name:        req.Name,
-		Subjects:    req.Subjects,
-		Description: req.Description,
-		MaxMsgs:     req.MaxMsgs,
-		MaxBytes:    req.MaxBytes,
-		MaxAge:      time.Duration(req.MaxAge) * time.Second,
-		Replicas:    req.Replicas,
-	}
-
-	switch req.Retention {
-	case "interest":
-		cfg.Retention = jetstream.InterestPolicy
-	case "workqueue":
-		cfg.Retention = jetstream.WorkQueuePolicy
-	default:
-		cfg.Retention = jetstream.LimitsPolicy
-	}
-
-	switch req.Storage {
-	case "memory":
-		cfg.Storage = jetstream.MemoryStorage
-	default:
-		cfg.Storage = jetstream.FileStorage
-	}
-
-	if cfg.Replicas == 0 {
-		cfg.Replicas = 1
-	}
-
-	stream, err := h.nc.JS().UpdateStream(ctx, cfg)
+	stream, err := h.nc.JS().UpdateStream(ctx, req.toStreamConfig())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -195,6 +164,10 @@ func (h *StreamsHandler) Update(c *gin.Context) {
 	})
 }
 
+type purgeRequest struct {
+	Subject string `json:"subject"`
+}
+
 func (h *StreamsHandler) Purge(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
@@ -206,11 +179,20 @@ func (h *StreamsHandler) Purge(c *gin.Context) {
 		return
 	}
 
-	if err := stream.Purge(ctx); err != nil {
+	var req purgeRequest
+	// Ignore bind errors — body is optional
+	_ = c.ShouldBindJSON(&req)
+
+	if req.Subject != "" {
+		err = stream.Purge(ctx, jetstream.WithPurgeSubject(req.Subject))
+	} else {
+		err = stream.Purge(ctx)
+	}
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"purged": name})
+	c.JSON(http.StatusOK, gin.H{"purged": name, "subject": req.Subject})
 }
 
 func (h *StreamsHandler) GetMessage(c *gin.Context) {

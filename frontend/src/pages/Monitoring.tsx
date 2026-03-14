@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Activity,
   TrendingUp,
@@ -7,6 +7,7 @@ import {
   Database,
   Clock,
 } from 'lucide-react';
+import { useTheme } from 'next-themes';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
@@ -75,8 +76,29 @@ function MetricCard({ title, value, description, icon, trend, status = 'normal' 
   );
 }
 
+// Chart colors that work in both light and dark mode
+function useChartColors() {
+  const { resolvedTheme } = useTheme();
+  return useMemo(() => {
+    const dark = resolvedTheme === 'dark';
+    return {
+      grid: dark ? '#333' : '#e5e7eb',
+      text: dark ? '#a1a1aa' : '#6b7280',
+      messages: dark ? '#a78bfa' : '#8884d8',
+      bytesIn: dark ? '#6ee7b7' : '#82ca9d',
+      bytesOut: dark ? '#93c5fd' : '#8884d8',
+      connections: dark ? '#fcd34d' : '#ffc658',
+      cpu: dark ? '#fca5a5' : '#ff7c7c',
+      memory: dark ? '#67e8f9' : '#8dd1e1',
+      bar: dark ? '#a78bfa' : '#8884d8',
+      tooltip: { bg: dark ? '#1f2937' : '#fff', border: dark ? '#374151' : '#e5e7eb' },
+    };
+  }, [resolvedTheme]);
+}
+
 export function Monitoring() {
   const { isConnected } = useNats();
+  const colors = useChartColors();
   const [serverInfo, setServerInfo] = useState<NatsServerInfo | null>(null);
   const [connections, setConnections] = useState<NatsConnectionInfo | null>(null);
   const [jetStreamInfo, setJetStreamInfo] = useState<JetStreamInfo | null>(null);
@@ -269,14 +291,14 @@ export function Monitoring() {
                 {timeSeriesData.length >= 2 ? (
                   <ResponsiveContainer width="100%" height={220}>
                     <LineChart data={timeSeriesData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="time" />
-                      <YAxis />
-                      <Tooltip />
+                      <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
+                      <XAxis dataKey="time" tick={{ fill: colors.text, fontSize: 12 }} />
+                      <YAxis tick={{ fill: colors.text, fontSize: 12 }} />
+                      <Tooltip contentStyle={{ backgroundColor: colors.tooltip.bg, borderColor: colors.tooltip.border, borderRadius: 8 }} />
                       <Line
                         type="monotone"
                         dataKey="messages"
-                        stroke="#8884d8"
+                        stroke={colors.messages}
                         strokeWidth={2}
                         dot={false}
                       />
@@ -304,14 +326,14 @@ export function Monitoring() {
                 {timeSeriesData.length >= 2 ? (
                   <ResponsiveContainer width="100%" height={220}>
                     <LineChart data={timeSeriesData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="time" />
-                      <YAxis />
-                      <Tooltip />
+                      <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
+                      <XAxis dataKey="time" tick={{ fill: colors.text, fontSize: 12 }} />
+                      <YAxis tick={{ fill: colors.text, fontSize: 12 }} />
+                      <Tooltip contentStyle={{ backgroundColor: colors.tooltip.bg, borderColor: colors.tooltip.border, borderRadius: 8 }} />
                       <Line
                         type="monotone"
                         dataKey="bytesIn"
-                        stroke="#82ca9d"
+                        stroke={colors.bytesIn}
                         strokeWidth={2}
                         name="Bytes In"
                         dot={false}
@@ -319,7 +341,7 @@ export function Monitoring() {
                       <Line
                         type="monotone"
                         dataKey="bytesOut"
-                        stroke="#8884d8"
+                        stroke={colors.bytesOut}
                         strokeWidth={2}
                         name="Bytes Out"
                         dot={false}
@@ -352,14 +374,14 @@ export function Monitoring() {
                 {timeSeriesData.length >= 2 ? (
                   <ResponsiveContainer width="100%" height={220}>
                     <LineChart data={timeSeriesData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="time" />
-                      <YAxis />
-                      <Tooltip />
+                      <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
+                      <XAxis dataKey="time" tick={{ fill: colors.text, fontSize: 12 }} />
+                      <YAxis tick={{ fill: colors.text, fontSize: 12 }} />
+                      <Tooltip contentStyle={{ backgroundColor: colors.tooltip.bg, borderColor: colors.tooltip.border, borderRadius: 8 }} />
                       <Line
                         type="monotone"
                         dataKey="connections"
-                        stroke="#ffc658"
+                        stroke={colors.connections}
                         strokeWidth={2}
                         dot={false}
                       />
@@ -425,11 +447,11 @@ export function Monitoring() {
               {subjectData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={280}>
                   <BarChart data={subjectData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="messages" fill="#8884d8" />
+                    <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
+                    <XAxis dataKey="name" tick={{ fill: colors.text, fontSize: 12 }} />
+                    <YAxis tick={{ fill: colors.text, fontSize: 12 }} />
+                    <Tooltip contentStyle={{ backgroundColor: colors.tooltip.bg, borderColor: colors.tooltip.border, borderRadius: 8 }} />
+                    <Bar dataKey="messages" fill={colors.bar} />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
@@ -475,14 +497,14 @@ export function Monitoring() {
                 {timeSeriesData.length >= 2 ? (
                   <ResponsiveContainer width="100%" height={220}>
                     <LineChart data={timeSeriesData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="time" />
-                      <YAxis unit="%" />
-                      <Tooltip formatter={(value: number) => [`${value}%`, 'CPU']} />
+                      <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
+                      <XAxis dataKey="time" tick={{ fill: colors.text, fontSize: 12 }} />
+                      <YAxis unit="%" tick={{ fill: colors.text, fontSize: 12 }} />
+                      <Tooltip formatter={(value: number) => [`${value}%`, 'CPU']} contentStyle={{ backgroundColor: colors.tooltip.bg, borderColor: colors.tooltip.border, borderRadius: 8 }} />
                       <Line
                         type="monotone"
                         dataKey="cpu"
-                        stroke="#ff7c7c"
+                        stroke={colors.cpu}
                         strokeWidth={2}
                         name="CPU %"
                         dot={false}
@@ -508,14 +530,14 @@ export function Monitoring() {
                 {timeSeriesData.length >= 2 ? (
                   <ResponsiveContainer width="100%" height={220}>
                     <LineChart data={timeSeriesData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="time" />
-                      <YAxis tickFormatter={(v: number) => formatBytes(v)} />
-                      <Tooltip formatter={(value: number) => [formatBytes(value), 'Memory']} />
+                      <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
+                      <XAxis dataKey="time" tick={{ fill: colors.text, fontSize: 12 }} />
+                      <YAxis tickFormatter={(v: number) => formatBytes(v)} tick={{ fill: colors.text, fontSize: 12 }} />
+                      <Tooltip formatter={(value: number) => [formatBytes(value), 'Memory']} contentStyle={{ backgroundColor: colors.tooltip.bg, borderColor: colors.tooltip.border, borderRadius: 8 }} />
                       <Line
                         type="monotone"
                         dataKey="memory"
-                        stroke="#8dd1e1"
+                        stroke={colors.memory}
                         strokeWidth={2}
                         name="Memory"
                         dot={false}

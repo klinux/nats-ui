@@ -3,6 +3,8 @@ import {
   Database,
   Home,
   MessageSquare,
+  Network,
+  Package,
   Settings,
   GitBranch,
   Users,
@@ -40,10 +42,12 @@ const navItems: NavItem[] = [
   { title: 'Streams', path: '/streams', icon: GitBranch },
   { title: 'Consumers', path: '/consumers', icon: Users },
   { title: 'KV Store', path: '/kv-store', icon: Database },
+  { title: 'Object Store', path: '/object-store', icon: Package },
 ];
 
 const systemItems: NavItem[] = [
   { title: 'Monitoring', path: '/monitoring', icon: Monitor },
+  { title: 'Cluster', path: '/cluster', icon: Network },
   { title: 'Settings', path: '/settings', icon: Settings },
 ];
 

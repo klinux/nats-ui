@@ -127,8 +127,9 @@ export async function deleteStream(name: string): Promise<void> {
   await request(`/streams/${name}`, { method: 'DELETE' });
 }
 
-export async function purgeStream(name: string): Promise<void> {
-  await request(`/streams/${name}/purge`, { method: 'POST' });
+export async function purgeStream(name: string, subject?: string): Promise<void> {
+  const body = subject ? JSON.stringify({ subject }) : undefined;
+  await request(`/streams/${name}/purge`, { method: 'POST', body });
 }
 
 export interface StreamMessage {
@@ -298,6 +299,134 @@ export function subscribeSSE(
     if (retryTimeout) clearTimeout(retryTimeout);
     es?.close();
   };
+}
+
+// Object Store
+export interface ObjectStoreBucket {
+  name: string;
+  description: string;
+  sealed: boolean;
+  size: number;
+  chunks: number;
+  ttl?: number;
+  storage?: string;
+  replicas?: number;
+}
+
+export interface ObjectInfo {
+  name: string;
+  description: string;
+  size: number;
+  chunks: number;
+  digest: string;
+  modified: string;
+}
+
+export async function listObjectStoreBuckets(): Promise<ObjectStoreBucket[]> {
+  return request('/objectstore');
+}
+
+export async function getObjectStoreBucket(name: string): Promise<ObjectStoreBucket> {
+  return request(`/objectstore/${name}`);
+}
+
+export async function createObjectStoreBucket(config: { name: string; description?: string; max_bytes?: number; max_chunk_size?: number; ttl?: number }): Promise<ObjectStoreBucket> {
+  return request('/objectstore', { method: 'POST', body: JSON.stringify(config) });
+}
+
+export async function deleteObjectStoreBucket(name: string): Promise<void> {
+  await request(`/objectstore/${name}`, { method: 'DELETE' });
+}
+
+export async function listObjects(bucket: string): Promise<ObjectInfo[]> {
+  return request(`/objectstore/${bucket}/objects`);
+}
+
+export async function getObjectInfo(bucket: string, name: string): Promise<ObjectInfo> {
+  return request(`/objectstore/${bucket}/objects/${name}/info`);
+}
+
+export async function uploadObject(bucket: string, name: string, data: Blob | ArrayBuffer): Promise<void> {
+  const token = localStorage.getItem('nats-ui-token');
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const response = await fetch(`${API_BASE}/api/objectstore/${bucket}/objects/${name}`, {
+    method: 'PUT',
+    headers,
+    body: data,
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(body.error || `HTTP ${response.status}`);
+  }
+}
+
+export async function downloadObject(bucket: string, name: string): Promise<Blob> {
+  const token = localStorage.getItem('nats-ui-token');
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const response = await fetch(`${API_BASE}/api/objectstore/${bucket}/objects/${name}`, {
+    method: 'GET',
+    headers,
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.blob();
+}
+
+export async function deleteObject(bucket: string, name: string): Promise<void> {
+  await request(`/objectstore/${bucket}/objects/${name}`, { method: 'DELETE' });
+}
+
+// Consumer pause/resume
+export async function pauseConsumer(streamName: string, consumerName: string, pauseUntil?: string): Promise<{ paused: boolean; pause_until?: string }> {
+  return request(`/streams/${streamName}/consumers/${consumerName}/pause`, {
+    method: 'POST',
+    body: JSON.stringify(pauseUntil ? { pause_until: pauseUntil } : {})
+  });
+}
+
+export async function resumeConsumer(streamName: string, consumerName: string): Promise<{ paused: boolean }> {
+  return request(`/streams/${streamName}/consumers/${consumerName}/resume`, { method: 'POST' });
+}
+
+// Stream message replay
+export async function replayStreamMessages(streamName: string, params: {
+  seq?: number;
+  last?: number;
+  subject?: string;
+  start_time?: string;
+  limit?: number;
+}): Promise<StreamMessage[]> {
+  const q = new URLSearchParams();
+  if (params.seq) q.set('seq', String(params.seq));
+  if (params.last) q.set('last', String(params.last));
+  if (params.subject) q.set('subject', params.subject);
+  if (params.start_time) q.set('start_time', params.start_time);
+  if (params.limit) q.set('limit', String(params.limit));
+  return request(`/streams/${streamName}/messages?${q.toString()}`);
+}
+
+// Cluster monitoring
+export async function fetchGateways(): Promise<Record<string, unknown>> {
+  return request('/server/gateways');
+}
+
+export async function fetchLeafnodes(): Promise<Record<string, unknown>> {
+  return request('/server/leafnodes');
+}
+
+export async function fetchAccounts(): Promise<Record<string, unknown>> {
+  return request('/server/accounts');
+}
+
+export async function fetchAccountDetail(account: string): Promise<Record<string, unknown>> {
+  return request(`/server/accounts/${account}`);
+}
+
+export async function fetchVarz(): Promise<Record<string, unknown>> {
+  return request('/server/varz');
 }
 
 // Health

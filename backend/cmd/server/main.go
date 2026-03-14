@@ -37,6 +37,7 @@ func main() {
 	streamsH := handler.NewStreamsHandler(nc)
 	consumersH := handler.NewConsumersHandler(nc)
 	kvH := handler.NewKVHandler(nc)
+	objH := handler.NewObjectStoreHandler(nc)
 	messagesH := handler.NewMessagesHandler(nc)
 
 	// Router
@@ -66,6 +67,7 @@ func main() {
 	validateName := middleware.ValidatePathParam("name")
 	validateConsumer := middleware.ValidatePathParam("consumer")
 	validateBucket := middleware.ValidatePathParam("bucket")
+	validateAccount := middleware.ValidatePathParam("account")
 
 	// Public routes
 	api := r.Group("/api")
@@ -88,6 +90,11 @@ func main() {
 		protected.GET("/server/jetstream", serverH.JetStreamInfo)
 		protected.GET("/server/subscriptions", serverH.Subscriptions)
 		protected.GET("/server/routes", serverH.Routes)
+		protected.GET("/server/gateways", serverH.Gateways)
+		protected.GET("/server/leafnodes", serverH.Leafnodes)
+		protected.GET("/server/accounts", serverH.Accounts)
+		protected.GET("/server/accounts/:account", validateAccount, serverH.AccountDetail)
+		protected.GET("/server/varz", serverH.ServerVarz)
 
 		// Streams
 		protected.GET("/streams", streamsH.List)
@@ -103,6 +110,8 @@ func main() {
 		protected.POST("/streams/:name/consumers", validateName, consumersH.Create)
 		protected.GET("/streams/:name/consumers/:consumer", validateName, validateConsumer, consumersH.Get)
 		protected.DELETE("/streams/:name/consumers/:consumer", validateName, validateConsumer, consumersH.Delete)
+		protected.POST("/streams/:name/consumers/:consumer/pause", validateName, validateConsumer, consumersH.Pause)
+		protected.POST("/streams/:name/consumers/:consumer/resume", validateName, validateConsumer, consumersH.Resume)
 
 		// KV Store
 		protected.GET("/kv", kvH.ListBuckets)
@@ -112,6 +121,17 @@ func main() {
 		protected.GET("/kv/:bucket/keys/:key", validateBucket, kvH.GetValue)
 		protected.PUT("/kv/:bucket/keys/:key", validateBucket, kvH.PutValue)
 		protected.DELETE("/kv/:bucket/keys/:key", validateBucket, kvH.DeleteKey)
+
+		// Object Store
+		protected.GET("/objectstore", objH.ListBuckets)
+		protected.POST("/objectstore", objH.CreateBucket)
+		protected.GET("/objectstore/:bucket", validateBucket, objH.GetBucket)
+		protected.DELETE("/objectstore/:bucket", validateBucket, objH.DeleteBucket)
+		protected.GET("/objectstore/:bucket/objects", validateBucket, objH.ListObjects)
+		protected.GET("/objectstore/:bucket/objects/:name", validateBucket, validateName, objH.GetObject)
+		protected.PUT("/objectstore/:bucket/objects/:name", validateBucket, validateName, objH.PutObject)
+		protected.DELETE("/objectstore/:bucket/objects/:name", validateBucket, validateName, objH.DeleteObject)
+		protected.GET("/objectstore/:bucket/objects/:name/info", validateBucket, validateName, objH.GetObjectInfo)
 
 		// Messages
 		protected.POST("/messages/publish", messagesH.Publish)

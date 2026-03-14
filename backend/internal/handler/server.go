@@ -81,3 +81,49 @@ func (h *ServerHandler) Health(c *gin.Context) {
 		"connected": h.nc.IsConnected(),
 	})
 }
+
+func (h *ServerHandler) Gateways(c *gin.Context) {
+	data, err := h.nc.FetchMonitoring("/gatewayz")
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	c.Data(http.StatusOK, "application/json", data)
+}
+
+func (h *ServerHandler) Leafnodes(c *gin.Context) {
+	data, err := h.nc.FetchMonitoring("/leafz")
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	c.Data(http.StatusOK, "application/json", data)
+}
+
+func (h *ServerHandler) Accounts(c *gin.Context) {
+	data, err := h.nc.FetchMonitoring("/accountz")
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	c.Data(http.StatusOK, "application/json", data)
+}
+
+func (h *ServerHandler) AccountDetail(c *gin.Context) {
+	account := c.Param("account")
+	data, err := h.nc.FetchMonitoring("/accountz?acc=" + account)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	c.Data(http.StatusOK, "application/json", data)
+}
+
+func (h *ServerHandler) ServerVarz(c *gin.Context) {
+	data, err := h.nc.FetchMonitoring("/varz")
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	c.Data(http.StatusOK, "application/json", data)
+}

@@ -14,7 +14,9 @@ import { Messages } from './pages/Messages';
 import { Streams } from './pages/Streams';
 import { Consumers } from './pages/Consumers';
 import { KVStore } from './pages/KVStore';
+import { ObjectStore } from './pages/ObjectStore';
 import { Monitoring } from './pages/Monitoring';
+import { Cluster } from './pages/Cluster';
 import { Settings } from './pages/Settings';
 import { Login } from './pages/Login';
 
@@ -62,7 +64,9 @@ function App() {
                   <Route path="streams" element={<Streams />} />
                   <Route path="consumers" element={<Consumers />} />
                   <Route path="kv-store" element={<KVStore />} />
+                  <Route path="object-store" element={<ObjectStore />} />
                   <Route path="monitoring" element={<Monitoring />} />
+                  <Route path="cluster" element={<Cluster />} />
                   <Route path="settings" element={<Settings />} />
                 </Route>
               </Routes>

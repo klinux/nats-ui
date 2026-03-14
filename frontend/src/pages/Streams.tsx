@@ -1,102 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import {
-  GitBranch,
-  Plus,
-  Trash2,
-  Info,
-  Calendar,
-  Users,
-  Eraser,
-  Eye,
-} from 'lucide-react';
-
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import { Plus } from 'lucide-react';
 import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
-import { Textarea } from '../components/ui/textarea';
-import { Badge } from '../components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { useNats } from '../hooks/useNats';
 import { toast } from 'sonner';
 import { fetchJetStreamStreams } from '../services/nats-service';
-import { purgeStream, getStreamMessages, type StreamMessage } from '../services/api-client';
-import { TableRowSkeleton } from '../components/ui/skeletons';
-import { formatBytes } from '../lib/format';
-
-const createStreamSchema = z.object({
-  name: z.string().min(1, 'Stream name is required').regex(/^[a-zA-Z0-9_-]+$/, 'Invalid stream name'),
-  subjects: z.string().min(1, 'At least one subject is required'),
-  description: z.string().optional(),
-  retention: z.enum(['limits', 'interest', 'workqueue']),
-  storage: z.enum(['file', 'memory']),
-  maxMsgs: z.number().min(0),
-  maxBytes: z.number().min(0),
-  maxAge: z.number().min(0),
-  replicas: z.number().min(1).max(5),
-});
-
-type CreateStreamFormData = z.infer<typeof createStreamSchema>;
-
-interface StreamInfo {
-  name: string;
-  subjects: string[];
-  description?: string;
-  retention: 'limits' | 'interest' | 'workqueue';
-  storage: 'file' | 'memory';
-  messages: number;
-  bytes: number;
-  maxMsgs: number;
-  maxBytes: number;
-  maxAge: number;
-  replicas: number;
-  created: Date;
-  consumers: number;
-}
-
-// Helper function to convert JetStream API data to StreamInfo
-function convertJetStreamData(jsData: Record<string, unknown>): StreamInfo {
-  const config = (jsData.config as Record<string, unknown>) || {};
-  const state = (jsData.state as Record<string, unknown>) || {};
-  
-  return {
-    name: (config.name as string) || '',
-    subjects: (config.subjects as string[]) || [],
-    description: (config.description as string) || '',
-    retention: ((config.retention as string) || 'limits') as 'limits' | 'interest' | 'workqueue',
-    storage: ((config.storage as string) || 'file') as 'file' | 'memory',
-    messages: (state.messages as number) || 0,
-    bytes: (state.bytes as number) || 0,
-    maxMsgs: (config.max_msgs as number) || 0,
-    maxBytes: (config.max_bytes as number) || 0,
-    maxAge: (config.max_age as number) ? (config.max_age as number) / 1000000000 : 0, // Convert from nanoseconds
-    replicas: (config.num_replicas as number) || 1,
-    created: new Date((jsData.created as string | number) || Date.now()),
-    consumers: (state.consumer_count as number) || 0,
-  };
-}
-
-
-
-function formatDuration(ms: number): string {
-  if (ms === 0) return 'Forever';
-  
-  const seconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
-
-  if (days > 0) return `${days}d`;
-  if (hours > 0) return `${hours}h`;
-  if (minutes > 0) return `${minutes}m`;
-  return `${seconds}s`;
-}
+import { purgeStream } from '../services/api-client';
+import { convertJetStreamData, type StreamInfo } from '../components/streams/types';
+import { StreamList } from '../components/streams/StreamList';
+import { StreamDetail } from '../components/streams/StreamDetail';
+import { MessageBrowser } from '../components/streams/MessageBrowser';
+import { CreateStreamDialog, type CreateStreamFormData } from '../components/streams/CreateStreamDialog';
 
 export function Streams() {
   const { connection, isConnected } = useNats();
@@ -104,42 +17,15 @@ export function Streams() {
   const [selectedStream, setSelectedStream] = useState<StreamInfo | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [streamToDelete, setStreamToDelete] = useState<string | null>(null);
-  const [streamToPurge, setStreamToPurge] = useState<string | null>(null);
   const [messagesStream, setMessagesStream] = useState<string | null>(null);
-  const [streamMessages, setStreamMessages] = useState<StreamMessage[]>([]);
-  const [messagesLoading, setMessagesLoading] = useState(false);
-  const [showBlur, setShowBlur] = useState(false);
-  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const importRef = useRef<HTMLInputElement>(null);
 
-  const form = useForm<CreateStreamFormData>({
-    resolver: zodResolver(createStreamSchema),
-    defaultValues: {
-      name: '',
-      subjects: '',
-      description: '',
-      retention: 'limits',
-      storage: 'file',
-      maxMsgs: 1000000,
-      maxBytes: 1073741824, // 1GB
-      maxAge: 0, // Forever
-      replicas: 1,
-    },
-  });
-
-  // Fetch streams from JetStream
   const fetchStreams = useCallback(async (isInitialLoad = false) => {
     if (!isConnected || !connection) return;
-
-    // Only show loading on initial load
-    if (isInitialLoad) {
-      setLoading(true);
-    }
+    if (isInitialLoad) setLoading(true);
 
     try {
-      // Try to use JetStream API first, then fallback to HTTP monitoring API
       let streamsData: Record<string, unknown>[] = [];
-
       try {
         streamsData = await connection.jetstream.listStreams();
       } catch (jsError) {
@@ -147,46 +33,33 @@ export function Streams() {
         streamsData = await fetchJetStreamStreams();
       }
 
-      const convertedStreams = streamsData.map(convertJetStreamData);
-
-      // Only update state if data has actually changed
-      setStreams((prevStreams) => {
-        // Check if streams have changed by comparing names and key properties
-        const hasChanged = prevStreams.length !== convertedStreams.length ||
-          !prevStreams.every((prevStream, index) => {
-            const newStream = convertedStreams[index];
-            return prevStream.name === newStream?.name &&
-              prevStream.messages === newStream?.messages &&
-              prevStream.bytes === newStream?.bytes &&
-              prevStream.consumers === newStream?.consumers;
+      const converted = streamsData.map(convertJetStreamData);
+      setStreams((prev) => {
+        const changed = prev.length !== converted.length ||
+          !prev.every((p, i) => {
+            const n = converted[i];
+            return p.name === n?.name && p.messages === n?.messages &&
+              p.bytes === n?.bytes && p.consumers === n?.consumers;
           });
-
-        return hasChanged ? convertedStreams : prevStreams;
+        return changed ? converted : prev;
       });
     } catch (error) {
       console.error('Failed to fetch streams:', error);
-      // Only show error if JetStream is expected to be available
       if (error instanceof Error && !error.message.includes('not enabled')) {
         toast.error('Failed to fetch streams');
       }
     } finally {
-      if (isInitialLoad) {
-        setLoading(false);
-      }
+      if (isInitialLoad) setLoading(false);
     }
   }, [isConnected, connection]);
 
   const handleCreateStream = useCallback(async (data: CreateStreamFormData) => {
-    if (!connection) {
-      toast.error('Not connected to NATS server');
-      return;
-    }
-
+    if (!connection) { toast.error('Not connected to NATS server'); return; }
 
     try {
-      const streamConfig = {
+      const config: Record<string, unknown> = {
         name: data.name,
-        subjects: data.subjects.split(',').map(s => s.trim()),
+        subjects: data.subjects.split(',').map((s) => s.trim()),
         description: data.description,
         retention: data.retention,
         storage: data.storage,
@@ -196,96 +69,113 @@ export function Streams() {
         replicas: data.replicas,
       };
 
-      await connection.jetstream.createStream(streamConfig);
-      
+      if (data.mirror?.trim()) {
+        config.mirror = { name: data.mirror.trim() };
+      }
+      if (data.sources?.trim()) {
+        config.sources = data.sources.split(',').map((s) => ({ name: s.trim() }));
+      }
+
+      await connection.jetstream.createStream(config);
       setIsCreateOpen(false);
-      form.reset();
       toast.success(`Stream ${data.name} created successfully`);
-      
-      // Refresh streams list
       await fetchStreams();
     } catch (err) {
       console.error('Create stream error:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      
-      // Check for common JetStream issues
-      if (errorMessage.includes('JetStream not enabled')) {
-        toast.error('JetStream is not enabled on the NATS server');
-      } else if (errorMessage.includes('already exists')) {
-        toast.error(`Stream "${data.name}" already exists`);
-      } else {
-        toast.error(`Failed to create stream: ${errorMessage}`);
-      }
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      if (msg.includes('JetStream not enabled')) toast.error('JetStream is not enabled on the NATS server');
+      else if (msg.includes('already exists')) toast.error(`Stream "${data.name}" already exists`);
+      else toast.error(`Failed to create stream: ${msg}`);
     }
-  }, [connection, form, fetchStreams]);
+  }, [connection, fetchStreams]);
 
-  const handleDeleteStream = useCallback(async (streamName: string) => {
-    if (!connection) {
-      toast.error('Not connected to NATS server');
-      return;
-    }
-
+  const handleDeleteStream = useCallback(async (name: string) => {
+    if (!connection) { toast.error('Not connected to NATS server'); return; }
     try {
-      await connection.jetstream.deleteStream(streamName);
-      toast.success(`Stream ${streamName} deleted`);
-      
-      // Refresh streams list
+      await connection.jetstream.deleteStream(name);
+      toast.success(`Stream ${name} deleted`);
       await fetchStreams();
     } catch (err) {
-      console.error('Delete stream error:', err);
       toast.error(`Failed to delete stream: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   }, [connection, fetchStreams]);
 
-  const handlePurgeStream = useCallback(async (streamName: string) => {
+  const handlePurgeStream = useCallback(async (name: string, subject?: string) => {
     try {
-      await purgeStream(streamName);
-      toast.success(`Stream ${streamName} purged`);
+      await purgeStream(name, subject);
+      toast.success(subject ? `Purged matching messages from ${name}` : `Stream ${name} purged`);
       await fetchStreams();
     } catch (err) {
       toast.error(`Failed to purge stream: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   }, [fetchStreams]);
 
-  const handleViewMessages = useCallback(async (streamName: string) => {
-    setMessagesStream(streamName);
-    setMessagesLoading(true);
+  const handleExportStream = useCallback((stream: StreamInfo) => {
+    const config = {
+      name: stream.name,
+      subjects: stream.subjects,
+      description: stream.description,
+      retention: stream.retention,
+      storage: stream.storage,
+      max_msgs: stream.maxMsgs,
+      max_bytes: stream.maxBytes,
+      max_age: stream.maxAge,
+      num_replicas: stream.replicas,
+    };
+    const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `stream-${stream.name}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported config for ${stream.name}`);
+  }, []);
+
+  const handleImportStream = useCallback(() => {
+    importRef.current?.click();
+  }, []);
+
+  const handleImportFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !connection) return;
+
     try {
-      const msgs = await getStreamMessages(streamName, 50);
-      setStreamMessages(msgs);
+      const text = await file.text();
+      const config = JSON.parse(text);
+
+      if (!config.name) {
+        toast.error('Invalid stream config: missing name');
+        return;
+      }
+
+      await connection.jetstream.createStream({
+        name: config.name,
+        subjects: config.subjects || [],
+        description: config.description,
+        retention: config.retention || 'limits',
+        storage: config.storage || 'file',
+        maxMsgs: config.max_msgs || config.maxMsgs || 0,
+        maxBytes: config.max_bytes || config.maxBytes || 0,
+        maxAge: config.max_age || config.maxAge || 0,
+        replicas: config.num_replicas || config.replicas || 1,
+      });
+      toast.success(`Stream ${config.name} imported successfully`);
+      await fetchStreams();
     } catch (err) {
-      toast.error(`Failed to fetch messages: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      setStreamMessages([]);
+      toast.error(`Import failed: ${err instanceof Error ? err.message : 'Invalid JSON'}`);
     } finally {
-      setMessagesLoading(false);
+      e.target.value = '';
     }
-  }, []);
+  }, [connection, fetchStreams]);
 
-  // Check if table needs scroll blur
-  const checkScrollBlur = useCallback(() => {
-    if (tableContainerRef.current) {
-      const { scrollHeight, clientHeight } = tableContainerRef.current;
-      setShowBlur(scrollHeight > clientHeight);
-    }
-  }, []);
-
-  // Load streams on mount and when connection changes
   useEffect(() => {
-    fetchStreams(true); // Initial load with loading state
-
-    // Refresh streams every 10 seconds when connected
+    fetchStreams(true);
     if (isConnected) {
-      const interval = setInterval(() => fetchStreams(false), 10000); // Background refresh without loading
+      const interval = setInterval(() => fetchStreams(false), 10000);
       return () => clearInterval(interval);
     }
   }, [isConnected, fetchStreams]);
-
-  // Check blur when streams change
-  useEffect(() => {
-    checkScrollBlur();
-    window.addEventListener('resize', checkScrollBlur);
-    return () => window.removeEventListener('resize', checkScrollBlur);
-  }, [streams, checkScrollBlur]);
 
   if (!isConnected) {
     return (
@@ -298,7 +188,6 @@ export function Streams() {
             </p>
           </div>
         </div>
-
       </div>
     );
   }
@@ -312,519 +201,29 @@ export function Streams() {
             Manage JetStream streams and their configurations
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Stream
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Create New Stream</DialogTitle>
-                <DialogDescription>
-                  Configure a new JetStream stream to store and replay messages.
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={form.handleSubmit(handleCreateStream)} className="space-y-6">
-                <Tabs defaultValue="basic" className="space-y-4">
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="basic">Basic</TabsTrigger>
-                    <TabsTrigger value="limits">Limits & Storage</TabsTrigger>
-                  </TabsList>
-                  
-                  <TabsContent value="basic" className="space-y-4">
-                    <div className="grid gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="name">Stream Name</Label>
-                        <Input
-                          id="name"
-                          placeholder="e.g., ORDERS"
-                          {...form.register('name')}
-                        />
-                        {form.formState.errors.name && (
-                          <p className="text-sm text-red-600">
-                            {form.formState.errors.name.message}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="subjects">Subjects (comma-separated)</Label>
-                        <Input
-                          id="subjects"
-                          placeholder="e.g., orders.*, order.created"
-                          {...form.register('subjects')}
-                        />
-                        {form.formState.errors.subjects && (
-                          <p className="text-sm text-red-600">
-                            {form.formState.errors.subjects.message}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="description">Description (optional)</Label>
-                        <Textarea
-                          id="description"
-                          placeholder="Stream description..."
-                          {...form.register('description')}
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="retention">Retention Policy</Label>
-                          <Select {...form.register('retention')}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select retention" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="limits">Limits</SelectItem>
-                              <SelectItem value="interest">Interest</SelectItem>
-                              <SelectItem value="workqueue">Work Queue</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="storage">Storage Type</Label>
-                          <Select {...form.register('storage')}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select storage" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="file">File</SelectItem>
-                              <SelectItem value="memory">Memory</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="limits" className="space-y-4">
-                    <div className="grid gap-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="maxMsgs">Max Messages</Label>
-                          <Input
-                            id="maxMsgs"
-                            type="number"
-                            min="0"
-                            {...form.register('maxMsgs', { valueAsNumber: true })}
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="maxBytes">Max Bytes</Label>
-                          <Input
-                            id="maxBytes"
-                            type="number"
-                            min="0"
-                            {...form.register('maxBytes', { valueAsNumber: true })}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="maxAge">Max Age (seconds, 0 = forever)</Label>
-                          <Input
-                            id="maxAge"
-                            type="number"
-                            min="0"
-                            {...form.register('maxAge', { valueAsNumber: true })}
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="replicas">Replicas</Label>
-                          <Input
-                            id="replicas"
-                            type="number"
-                            min="1"
-                            max="5"
-                            {...form.register('replicas', { valueAsNumber: true })}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </TabsContent>
-                </Tabs>
-
-                <div className="flex justify-end space-x-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setIsCreateOpen(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={form.formState.isSubmitting}>
-                    Create Stream
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </div>
+        <Button onClick={() => setIsCreateOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" /> Create Stream
+        </Button>
       </div>
 
-      {/* Streams Table */}
-      <Card className="flex-1 flex flex-col overflow-hidden">
-        <CardHeader className="flex-shrink-0">
-          <CardTitle className="flex items-center gap-2">
-            <GitBranch className="h-5 w-5" />
-            JetStream Streams ({streams.length})
-          </CardTitle>
-          <CardDescription>
-            Overview of all configured JetStream streams
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex-1 overflow-hidden relative">
-          {loading ? (
-            <div className="h-full overflow-auto" ref={tableContainerRef}>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Subjects</TableHead>
-                    <TableHead>Messages</TableHead>
-                    <TableHead>Size</TableHead>
-                    <TableHead>Consumers</TableHead>
-                    <TableHead>Storage</TableHead>
-                    <TableHead>Created</TableHead>
-                    <TableHead className="w-20">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {Array.from({ length: 3 }).map((_, i) => (
-                    <TableRowSkeleton key={i} columns={8} />
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          ) : streams.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full py-12 space-y-4">
-              <GitBranch className="h-12 w-12 text-muted-foreground/50" />
-              <div className="text-center space-y-2">
-                <h3 className="font-semibold">No streams configured</h3>
-                <p className="text-sm text-muted-foreground">
-                  Create your first JetStream stream to get started
-                </p>
-              </div>
-              <Button onClick={() => setIsCreateOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Stream
-              </Button>
-            </div>
-          ) : (
-            <div className="h-full overflow-auto" ref={tableContainerRef}>
-              <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Subjects</TableHead>
-                  <TableHead>Messages</TableHead>
-                  <TableHead>Size</TableHead>
-                  <TableHead>Consumers</TableHead>
-                  <TableHead>Storage</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="w-20">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {streams.map((stream) => (
-                  <TableRow key={stream.name}>
-                    <TableCell className="font-medium">{stream.name}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {stream.subjects.map((subject) => (
-                          <Badge key={subject} variant="secondary" className="text-xs">
-                            {subject}
-                          </Badge>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell>{stream.messages.toLocaleString()}</TableCell>
-                    <TableCell>{formatBytes(stream.bytes)}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Users className="h-3 w-3" />
-                        {stream.consumers}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={stream.storage === 'file' ? 'default' : 'secondary'}>
-                        {stream.storage}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                        <Calendar className="h-3 w-3" />
-                        {stream.created.toLocaleDateString()}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setSelectedStream(stream)}
-                          title="Details"
-                        >
-                          <Info className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleViewMessages(stream.name)}
-                          title="View Messages"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Dialog open={streamToPurge === stream.name} onOpenChange={(open) => {
-                          if (!open) setStreamToPurge(null);
-                        }}>
-                          <DialogTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setStreamToPurge(stream.name)}
-                              className="text-orange-600 hover:text-orange-700"
-                              title="Purge Messages"
-                            >
-                              <Eraser className="h-4 w-4" />
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent>
-                            <DialogHeader>
-                              <DialogTitle>Purge Stream</DialogTitle>
-                              <DialogDescription>
-                                Are you sure you want to purge all messages from stream "{stream.name}"? The stream itself will remain but all messages will be deleted.
-                              </DialogDescription>
-                            </DialogHeader>
-                            <DialogFooter>
-                              <Button variant="outline" onClick={() => setStreamToPurge(null)}>Cancel</Button>
-                              <Button
-                                onClick={() => { handlePurgeStream(stream.name); setStreamToPurge(null); }}
-                                className="bg-orange-600 text-white hover:bg-orange-700"
-                              >
-                                Purge Messages
-                              </Button>
-                            </DialogFooter>
-                          </DialogContent>
-                        </Dialog>
-                        <Dialog open={streamToDelete === stream.name} onOpenChange={(open) => {
-                          if (!open) setStreamToDelete(null);
-                        }}>
-                          <DialogTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setStreamToDelete(stream.name)}
-                              className="text-red-600 hover:text-red-700"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent>
-                            <DialogHeader>
-                              <DialogTitle>Delete Stream</DialogTitle>
-                              <DialogDescription>
-                                Are you sure you want to delete stream "{stream.name}"? This action cannot be undone and will permanently remove all messages in the stream.
-                              </DialogDescription>
-                            </DialogHeader>
-                            <DialogFooter>
-                              <Button
-                                variant="outline"
-                                onClick={() => setStreamToDelete(null)}
-                              >
-                                Cancel
-                              </Button>
-                              <Button
-                                onClick={() => {
-                                  handleDeleteStream(stream.name);
-                                  setStreamToDelete(null);
-                                }}
-                                className="bg-red-600 text-white hover:bg-red-700"
-                              >
-                                Delete Stream
-                              </Button>
-                            </DialogFooter>
-                          </DialogContent>
-                        </Dialog>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            </div>
-          )}
-          {/* Bottom fade effect - only show when scrollable */}
-          {showBlur && !loading && streams.length > 0 && (
-            <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-background to-transparent pointer-events-none" />
-          )}
-        </CardContent>
-      </Card>
+      <input ref={importRef} type="file" accept=".json" className="hidden"
+        onChange={handleImportFile} />
 
-      {/* Stream Details Dialog */}
-      {selectedStream && (
-        <Dialog open={!!selectedStream} onOpenChange={() => setSelectedStream(null)}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <GitBranch className="h-5 w-5" />
-                Stream: {selectedStream.name}
-              </DialogTitle>
-              <DialogDescription>
-                Detailed information and configuration for this stream
-              </DialogDescription>
-            </DialogHeader>
-            
-            <div className="space-y-6">
-              <div className="grid gap-4 md:grid-cols-2">
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">Storage Info</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Messages:</span>
-                      <span className="text-sm font-medium">{selectedStream.messages.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Size:</span>
-                      <span className="text-sm font-medium">{formatBytes(selectedStream.bytes)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Storage:</span>
-                      <Badge variant={selectedStream.storage === 'file' ? 'default' : 'secondary'}>
-                        {selectedStream.storage}
-                      </Badge>
-                    </div>
-                  </CardContent>
-                </Card>
+      <StreamList
+        streams={streams}
+        loading={loading}
+        onCreateOpen={() => setIsCreateOpen(true)}
+        onSelectStream={setSelectedStream}
+        onViewMessages={setMessagesStream}
+        onPurgeStream={handlePurgeStream}
+        onDeleteStream={handleDeleteStream}
+        onExportStream={handleExportStream}
+        onImportStream={handleImportStream}
+      />
 
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">Limits</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Max Messages:</span>
-                      <span className="text-sm font-medium">{selectedStream.maxMsgs.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Max Size:</span>
-                      <span className="text-sm font-medium">{formatBytes(selectedStream.maxBytes)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Max Age:</span>
-                      <span className="text-sm font-medium">{formatDuration(selectedStream.maxAge)}</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <Label className="text-sm font-medium">Subjects</Label>
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {selectedStream.subjects.map((subject) => (
-                      <Badge key={subject} variant="outline">
-                        {subject}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-
-                {selectedStream.description && (
-                  <div>
-                    <Label className="text-sm font-medium">Description</Label>
-                    <p className="text-sm text-muted-foreground mt-1">{selectedStream.description}</p>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <Label className="text-sm font-medium">Retention</Label>
-                    <p className="text-sm text-muted-foreground">{selectedStream.retention}</p>
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium">Replicas</Label>
-                    <p className="text-sm text-muted-foreground">{selectedStream.replicas}</p>
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium">Consumers</Label>
-                    <p className="text-sm text-muted-foreground">{selectedStream.consumers}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
-
-      {/* Stream Messages Browser */}
-      {messagesStream && (
-        <Dialog open={!!messagesStream} onOpenChange={() => setMessagesStream(null)}>
-          <DialogContent className="max-w-4xl max-h-[80vh]">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Eye className="h-5 w-5" />
-                Messages: {messagesStream}
-              </DialogTitle>
-              <DialogDescription>
-                Last 50 messages stored in this stream
-              </DialogDescription>
-            </DialogHeader>
-            <div className="overflow-auto max-h-[60vh]">
-              {messagesLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full" />
-                </div>
-              ) : streamMessages.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  No messages in this stream
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-16">Seq</TableHead>
-                      <TableHead>Subject</TableHead>
-                      <TableHead>Data</TableHead>
-                      <TableHead className="w-40">Timestamp</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {streamMessages.map((msg) => (
-                      <TableRow key={msg.sequence}>
-                        <TableCell className="font-mono text-xs">{msg.sequence}</TableCell>
-                        <TableCell>
-                          <Badge variant="secondary" className="text-xs">{msg.subject}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <pre className="text-xs max-w-md truncate font-mono bg-muted p-1 rounded">
-                            {typeof msg.data === 'string' ? msg.data : JSON.stringify(msg.data, null, 2)}
-                          </pre>
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {new Date(msg.timestamp).toLocaleString()}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
+      <StreamDetail stream={selectedStream} onClose={() => setSelectedStream(null)} />
+      <MessageBrowser streamName={messagesStream} onClose={() => setMessagesStream(null)} />
+      <CreateStreamDialog open={isCreateOpen} onOpenChange={setIsCreateOpen} onSubmit={handleCreateStream} />
     </div>
   );
 }
