@@ -1,11 +1,12 @@
 # Stage 1: Build frontend
 FROM node:22-alpine AS frontend-builder
+RUN corepack enable && corepack prepare pnpm@latest --activate
 ARG APP_VERSION=""
 WORKDIR /app/frontend
-COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
+COPY frontend/package.json frontend/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 COPY frontend/ .
-RUN APP_VERSION=${APP_VERSION} npm run build
+RUN APP_VERSION=${APP_VERSION} pnpm build
 
 # Stage 2: Build Go backend
 FROM golang:1.25-alpine AS backend-builder
