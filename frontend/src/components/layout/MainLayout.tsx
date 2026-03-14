@@ -83,16 +83,14 @@ export function MainLayout() {
     allItems.find((item) => item.path === location.pathname)?.title || 'NATS UI';
 
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={document.cookie.includes('sidebar_state=true')}>
       <Sidebar collapsible="icon">
         <SidebarHeader>
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton size="lg" asChild>
                 <div className="cursor-default">
-                  <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                    <Database className="size-4" />
-                  </div>
+                  <img src="/favicon.svg" alt="NATS UI" className="size-8 shrink-0 rounded-lg" />
                   <div className="grid flex-1 text-left text-sm leading-tight">
                     <span className="truncate font-semibold">NATS UI</span>
                     <span className="truncate text-xs flex items-center gap-1.5">

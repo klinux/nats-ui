@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="50%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#06b6d4"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a5b4fc" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#67e8f9" stop-opacity="0.1"/>
+    </linearGradient>
+    <linearGradient id="stream1" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="50%" stop-color="#ffffff" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="stream2" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#67e8f9" stop-opacity="0"/>
+      <stop offset="50%" stop-color="#67e8f9" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#67e8f9" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background rounded square -->
+  <rect x="16" y="16" width="480" height="480" rx="96" fill="url(#bg)"/>
+
+  <!-- Subtle inner glow -->
+  <rect x="16" y="16" width="480" height="480" rx="96" fill="url(#glow)"/>
+
+  <!-- Stylized "N" made of bold strokes -->
+  <!-- Left vertical bar -->
+  <rect x="120" y="128" width="52" height="256" rx="26" fill="white"/>
+
+  <!-- Right vertical bar -->
+  <rect x="340" y="128" width="52" height="256" rx="26" fill="white"/>
+
+  <!-- Diagonal connector -->
+  <path d="M146 154 L366 358" stroke="white" stroke-width="52" stroke-linecap="round"/>
+
+  <!-- Stream lines flowing through - representing data flow -->
+  <!-- Top stream -->
+  <path d="M60 200 C120 200, 140 170, 200 170 S280 200, 340 195 S400 175, 452 185"
+        stroke="url(#stream2)" stroke-width="3.5" stroke-linecap="round" fill="none" opacity="0.6"/>
+
+  <!-- Middle stream -->
+  <path d="M60 260 C110 260, 150 240, 200 245 S280 265, 330 255 S400 235, 452 250"
+        stroke="url(#stream2)" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.5"/>
+
+  <!-- Bottom stream -->
+  <path d="M60 320 C120 320, 150 340, 210 335 S280 315, 340 325 S410 345, 452 330"
+        stroke="url(#stream2)" stroke-width="3.5" stroke-linecap="round" fill="none" opacity="0.6"/>
+
+  <!-- Small dots representing messages in transit -->
+  <circle cx="185" cy="170" r="5" fill="white" opacity="0.7"/>
+  <circle cx="305" cy="255" r="4" fill="white" opacity="0.5"/>
+  <circle cx="250" cy="335" r="5" fill="white" opacity="0.6"/>
+  <circle cx="400" cy="185" r="3.5" fill="#67e8f9" opacity="0.7"/>
+  <circle cx="110" cy="260" r="3.5" fill="#67e8f9" opacity="0.6"/>
+  <circle cx="380" cy="330" r="4" fill="#67e8f9" opacity="0.7"/>
+</svg>

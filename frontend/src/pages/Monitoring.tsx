@@ -241,7 +241,11 @@ export function Monitoring() {
         />
       </div>
 
-      <Tabs defaultValue="performance" className="space-y-4">
+      <Tabs
+        defaultValue={localStorage.getItem('nats-ui-monitoring-tab') || 'performance'}
+        onValueChange={(v) => localStorage.setItem('nats-ui-monitoring-tab', v)}
+        className="space-y-4"
+      >
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="performance">Performance</TabsTrigger>
           <TabsTrigger value="connections">Connections</TabsTrigger>

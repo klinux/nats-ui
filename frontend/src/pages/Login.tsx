@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Database, Github, KeyRound, LogIn, Shield } from 'lucide-react';
+import { Github, KeyRound, LogIn, Shield } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
@@ -88,9 +88,7 @@ export function Login() {
         className="w-full max-w-md"
       >
         <div className="flex items-center justify-center gap-3 mb-8">
-          <div className="rounded-lg bg-primary p-3">
-            <Database className="h-6 w-6 text-primary-foreground" />
-          </div>
+          <img src="/favicon.svg" alt="NATS UI" className="h-12 w-12 rounded-lg" />
           <div>
             <h1 className="text-2xl font-bold">NATS UI</h1>
             <p className="text-sm text-muted-foreground">Management Dashboard</p>
