@@ -48,6 +48,21 @@ jobs:
           sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" helm/nats-ui/Chart.yaml
           helm package helm/nats-ui -d .helm-packages
 
+      - name: Update package.json version
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          cd frontend
+          npm version "$VERSION" --no-git-tag-version
+
+      - name: Commit version bump back to main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout main
+          git add helm/nats-ui/Chart.yaml frontend/package.json frontend/package-lock.json
+          git commit -m "chore: bump version to ${{ steps.version.outputs.version }} [skip ci]" || true
+          git push origin main
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
