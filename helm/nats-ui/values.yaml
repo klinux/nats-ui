@@ -1,7 +1,7 @@
 replicaCount: 1
 
 image:
-  repository: nats-ui
+  repository: klinux/nats-ui
   pullPolicy: IfNotPresent
   tag: ""  # defaults to appVersion
 
