@@ -100,7 +100,9 @@ export function MainLayout() {
             <SidebarMenuItem>
               <SidebarMenuButton size="lg" asChild>
                 <div className="cursor-default">
-                  <NatsIcon className="size-8 rounded-lg" />
+                  <div className="flex size-8 shrink-0 items-center justify-center rounded-lg">
+                    <NatsIcon className="size-8 rounded-lg" />
+                  </div>
                   <div className="grid flex-1 text-left text-sm leading-tight">
                     <span className="truncate font-semibold">NATS UI</span>
                     <span className="truncate text-xs flex items-center gap-1.5">
