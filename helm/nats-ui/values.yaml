@@ -1,0 +1,118 @@
+replicaCount: 1
+
+image:
+  repository: nats-ui
+  pullPolicy: IfNotPresent
+  tag: ""  # defaults to appVersion
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# Application configuration
+config:
+  port: "8080"
+  baseURL: ""  # auto-generated from ingress if empty
+  natsURL: "nats://nats:4222"
+  natsUser: "admin"
+  adminUser: "admin"
+
+# Sensitive values — stored in a Secret
+secrets:
+  natsPass: ""
+  adminPass: "admin"
+  jwtSecret: "change-me-in-production"
+
+# OAuth2 configuration (optional)
+oauth2:
+  google:
+    clientID: ""
+    clientSecret: ""
+  github:
+    clientID: ""
+    clientSecret: ""
+  keycloak:
+    url: ""           # e.g. https://keycloak.example.com
+    realm: "master"
+    clientID: ""
+    clientSecret: ""
+  oidc:
+    name: "SSO"       # display name on login page
+    issuerURL: ""      # OIDC issuer URL (uses .well-known/openid-configuration)
+    clientID: ""
+    clientSecret: ""
+    scopes: "openid email profile"
+  allowedUsers: "*"  # comma-separated emails or * for all
+
+# Use an existing secret instead of creating one
+# The secret must contain all sensitive keys (see secret.yaml for the full list)
+existingSecret: ""
+
+serviceAccount:
+  create: true
+  automount: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext: {}
+
+securityContext:
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: nats-ui.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# Kubernetes Gateway API (alternative to ingress)
+gateway:
+  enabled: false
+  annotations: {}
+  parentRefs:
+    - name: default-gateway
+      # namespace: gateway-ns
+      # sectionName: https
+      # port: 443
+  hostnames: []
+    # - nats-ui.example.com
+  rules: []
+    # - matches:
+    #     - path:
+    #         type: PathPrefix
+    #         value: /
+    #   filters: []
+
+resources: {}
+
+livenessProbe:
+  httpGet:
+    path: /api/health
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+readinessProbe:
+  httpGet:
+    path: /api/health
+    port: http
+  initialDelaySeconds: 3
+  periodSeconds: 5
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

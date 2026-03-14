@@ -1,0 +1,56 @@
+services:
+  nats:
+    image: nats:2.11-alpine
+    command: >
+      -js
+      -sd /data
+      -m 8222
+      --user ${NATS_USER:-admin}
+      --pass ${NATS_PASS:-nats-secret}
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    volumes:
+      - nats-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  nats-ui:
+    build: .
+    # image: nats-ui:latest  # uncomment to use pre-built image
+    ports:
+      - "${PORT:-8080}:8080"
+    environment:
+      PORT: "8080"
+      BASE_URL: ${BASE_URL:-http://localhost:8080}
+      NATS_URL: nats://nats:4222
+      NATS_USER: ${NATS_USER:-admin}
+      NATS_PASS: ${NATS_PASS:-nats-secret}
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASS: ${ADMIN_PASS:-admin}
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      ALLOWED_OAUTH2_USERS: ${ALLOWED_OAUTH2_USERS:-*}
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-master}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-}
+      OIDC_NAME: ${OIDC_NAME:-SSO}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_SCOPES: ${OIDC_SCOPES:-openid email profile}
+    depends_on:
+      nats:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  nats-data:

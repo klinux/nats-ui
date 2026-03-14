@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "nats-ui.fullname" . }}
+  labels:
+    {{- include "nats-ui.labels" . | nindent 4 }}
+data:
+  PORT: {{ .Values.config.port | quote }}
+  BASE_URL: {{ .Values.config.baseURL | quote }}
+  NATS_URL: {{ .Values.config.natsURL | quote }}
+  NATS_USER: {{ .Values.config.natsUser | quote }}
+  ADMIN_USER: {{ .Values.config.adminUser | quote }}
+  ALLOWED_OAUTH2_USERS: {{ .Values.oauth2.allowedUsers | quote }}
+  {{- if .Values.oauth2.keycloak.url }}
+  KEYCLOAK_URL: {{ .Values.oauth2.keycloak.url | quote }}
+  KEYCLOAK_REALM: {{ .Values.oauth2.keycloak.realm | quote }}
+  {{- end }}
+  {{- if .Values.oauth2.oidc.issuerURL }}
+  OIDC_NAME: {{ .Values.oauth2.oidc.name | quote }}
+  OIDC_ISSUER_URL: {{ .Values.oauth2.oidc.issuerURL | quote }}
+  OIDC_SCOPES: {{ .Values.oauth2.oidc.scopes | quote }}
+  {{- end }}
