@@ -151,10 +151,16 @@ func main() {
 
 	// Serve frontend static files
 	if _, err := os.Stat("./static"); err == nil {
+		r.Static("/assets", "./static/assets")
 		r.NoRoute(func(c *gin.Context) {
+			// Serve static file if it exists, otherwise fallback to SPA index.html
+			path := "./static" + c.Request.URL.Path
+			if info, err := os.Stat(path); err == nil && !info.IsDir() {
+				c.File(path)
+				return
+			}
 			c.File("./static/index.html")
 		})
-		r.Static("/assets", "./static/assets")
 	}
 
 	// Graceful shutdown
