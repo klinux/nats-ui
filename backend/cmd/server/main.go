@@ -2,9 +2,12 @@ package main
 
 import (
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/gin-contrib/cors"
@@ -151,15 +154,23 @@ func main() {
 
 	// Serve frontend static files
 	if _, err := os.Stat("./static"); err == nil {
-		r.Static("/assets", "./static/assets")
-
-		// Serve known root-level static files explicitly
-		for _, name := range []string{"favicon.svg", "logo.svg", "favicon.ico"} {
-			filePath := "./static/" + name
-			if _, err := os.Stat(filePath); err == nil {
-				r.StaticFile("/"+name, filePath)
+		staticFS := http.Dir("./static")
+		r.Use(func(c *gin.Context) {
+			// Skip API routes
+			if strings.HasPrefix(c.Request.URL.Path, "/api") {
+				c.Next()
+				return
 			}
-		}
+			// Try to serve static file directly
+			p := filepath.Clean(c.Request.URL.Path)
+			if f, err := staticFS.Open(p); err == nil {
+				f.Close()
+				http.FileServer(staticFS).ServeHTTP(c.Writer, c.Request)
+				c.Abort()
+				return
+			}
+			c.Next()
+		})
 
 		// SPA fallback for everything else
 		r.NoRoute(func(c *gin.Context) {
