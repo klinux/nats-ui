@@ -216,7 +216,7 @@ export function MainLayout() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => window.open('https://github.com/gastbob40/nats-ui', '_blank')}
+                  onClick={() => window.open('https://github.com/klinux/nats-ui', '_blank')}
                   className="h-8 w-8"
                   title="View on GitHub"
                 >

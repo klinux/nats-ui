@@ -19,7 +19,9 @@ export default defineConfig(({ mode }) => ({
     },
   },
   define: {
-    __APP_VERSION__: JSON.stringify(mode === 'production' ? packageJson.version : 'dev'),
+    __APP_VERSION__: JSON.stringify(
+      process.env.APP_VERSION || (mode === 'production' ? packageJson.version : 'dev')
+    ),
   },
   server: {
     proxy: {

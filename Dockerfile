@@ -1,10 +1,11 @@
 # Stage 1: Build frontend
 FROM node:22-alpine AS frontend-builder
+ARG APP_VERSION=""
 WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ .
-RUN npm run build
+RUN APP_VERSION=${APP_VERSION} npm run build
 
 # Stage 2: Build Go backend
 FROM golang:1.25-alpine AS backend-builder
