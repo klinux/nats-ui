@@ -1,0 +1,76 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREV_TAG=$(git tag --sort=-v:refname | grep '^v' | sed -n '2p')
+          if [ -n "$PREV_TAG" ]; then
+            CHANGES=$(git log --pretty=format:"- %s" "$PREV_TAG"..HEAD -- | grep -v "Co-Authored-By")
+          else
+            CHANGES=$(git log --pretty=format:"- %s" | grep -v "Co-Authored-By")
+          fi
+          {
+            echo "changes<<EOF"
+            echo "$CHANGES"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Update chart version and package
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          sed -i "s/^version:.*/version: $VERSION/" helm/nats-ui/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" helm/nats-ui/Chart.yaml
+          helm package helm/nats-ui -d .helm-packages
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          body: |
+            ## Changes
+
+            ${{ steps.changelog.outputs.changes }}
+
+            ## Docker
+
+            ```bash
+            docker pull klinux/nats-ui:${{ steps.version.outputs.version }}
+            ```
+
+            ## Helm
+
+            Download the chart from the release assets, then:
+
+            ```bash
+            helm install nats-ui nats-ui-${{ steps.version.outputs.version }}.tgz
+            ```
+          files: |
+            .helm-packages/*.tgz
+          generate_release_notes: false
