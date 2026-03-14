@@ -152,31 +152,12 @@ func main() {
 		protected.POST("/bench", benchH.Run)
 	}
 
-	// Serve frontend static files
-	if _, err := os.Stat("./static"); err == nil {
-		staticFS := http.Dir("./static")
-		r.Use(func(c *gin.Context) {
-			// Skip API routes
-			if strings.HasPrefix(c.Request.URL.Path, "/api") {
-				c.Next()
-				return
-			}
-			// Try to serve static file directly
-			p := filepath.Clean(c.Request.URL.Path)
-			if f, err := staticFS.Open(p); err == nil {
-				f.Close()
-				http.FileServer(staticFS).ServeHTTP(c.Writer, c.Request)
-				c.Abort()
-				return
-			}
-			c.Next()
-		})
-
-		// SPA fallback for everything else
-		r.NoRoute(func(c *gin.Context) {
+	// SPA fallback for client-side routing
+	r.NoRoute(func(c *gin.Context) {
+		if _, err := os.Stat("./static/index.html"); err == nil {
 			c.File("./static/index.html")
-		})
-	}
+		}
+	})
 
 	// Graceful shutdown
 	go func() {
@@ -188,8 +169,32 @@ func main() {
 		os.Exit(0)
 	}()
 
+	// Build final handler: static files first, then Gin router
+	var handler http.Handler = r
+	if _, err := os.Stat("./static"); err == nil {
+		staticFS := http.Dir("./static")
+		fileServer := http.FileServer(staticFS)
+		handler = http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			// Try static file first (skip /api routes)
+			if !strings.HasPrefix(req.URL.Path, "/api") {
+				p := filepath.Clean(req.URL.Path)
+				if f, err := staticFS.Open(p); err == nil {
+					stat, _ := f.Stat()
+					f.Close()
+					if stat != nil && !stat.IsDir() {
+						fileServer.ServeHTTP(w, req)
+						return
+					}
+				}
+			}
+			// Fallback to Gin router
+			r.ServeHTTP(w, req)
+		})
+	}
+
 	log.Printf("nats-ui backend listening on :%s", cfg.Port)
-	if err := r.Run(":" + cfg.Port); err != nil {
+	srv := &http.Server{Addr: ":" + cfg.Port, Handler: handler}
+	if err := srv.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
 }
