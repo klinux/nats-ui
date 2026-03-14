@@ -37,5 +37,3 @@ backend/server
 .dev-logs/
 .pid-*
 
-# Claude Code project instructions
-**/CLAUDE.md
