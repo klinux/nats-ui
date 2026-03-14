@@ -81,7 +81,11 @@ func (h *KVHandler) CreateBucket(c *gin.Context) {
 		return
 	}
 
-	status, _ := kv.Status(ctx)
+	status, err := kv.Status(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	c.JSON(http.StatusCreated, map[string]any{
 		"name":   req.Name,
 		"values": status.Values(),

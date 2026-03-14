@@ -85,7 +85,11 @@ func (h *MessagesHandler) Subscribe(c *gin.Context) {
 				"reply":     msg.Reply,
 			}
 
-			jsonData, _ := json.Marshal(evt)
+			jsonData, err := json.Marshal(evt)
+			if err != nil {
+				fmt.Fprintf(w, "data: {\"error\":\"marshal failed\"}\n\n")
+				return true
+			}
 			fmt.Fprintf(w, "data: %s\n\n", jsonData)
 			return true
 

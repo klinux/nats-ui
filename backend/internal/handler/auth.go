@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -34,11 +35,13 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	if req.Username != h.cfg.AdminUser {
+		log.Printf("auth: failed login attempt for user %q from %s", req.Username, c.ClientIP())
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}
 
 	if err := bcrypt.CompareHashAndPassword(h.hash, []byte(req.Password)); err != nil {
+		log.Printf("auth: failed login attempt for user %q from %s", req.Username, c.ClientIP())
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}

@@ -88,7 +88,11 @@ func (h *ConsumersHandler) Create(c *gin.Context) {
 		return
 	}
 
-	info, _ := consumer.Info(ctx)
+	info, err := consumer.Info(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	c.JSON(http.StatusCreated, map[string]any{
 		"config":      info.Config,
 		"stream_name": streamName,

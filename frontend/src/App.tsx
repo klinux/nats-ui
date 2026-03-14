@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from 'next-themes';
 import { Toaster } from 'sonner';
 
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { NatsProvider } from './contexts/NatsContext';
 import { MainLayout } from './components/layout/MainLayout';
 import { hasToken } from './services/api-client';
@@ -38,6 +39,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function App() {
   return (
+    <ErrorBoundary>
     <ThemeProvider
       attribute="class"
       defaultTheme="system"
@@ -75,6 +77,7 @@ function App() {
         </NatsProvider>
       </QueryClientProvider>
     </ThemeProvider>
+    </ErrorBoundary>
   );
 }
 

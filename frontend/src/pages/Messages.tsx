@@ -425,7 +425,7 @@ const MessagesComponent = function Messages() {
           replyTo: msg.reply,
         };
 
-        setMessages(prev => [message, ...prev.slice(0, 999)]); // Keep only last 1000 messages
+        setMessages(prev => [message, ...prev].slice(0, 1000));
         
         // Update message count
         setSubscriptions(prev => prev.map(s => 
@@ -613,6 +613,19 @@ const MessagesComponent = function Messages() {
     
     return () => clearInterval(serverInterval);
   }, [isConnected, fetchServerTopics, createTopicsHash, fetchTopics]);
+
+  // Evict messages older than 5 minutes
+  useEffect(() => {
+    const ttl = 5 * 60 * 1000;
+    const interval = setInterval(() => {
+      setMessages(prev => {
+        const cutoff = new Date(Date.now() - ttl);
+        const filtered = prev.filter(m => m.timestamp > cutoff);
+        return filtered.length !== prev.length ? filtered : prev;
+      });
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Handle responsive collapse state for publish card
   useEffect(() => {

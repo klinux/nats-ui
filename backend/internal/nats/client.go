@@ -15,6 +15,8 @@ import (
 	"nats-ui-backend/internal/config"
 )
 
+var httpClient = &http.Client{Timeout: 10 * time.Second}
+
 type Client struct {
 	conn    *nats.Conn
 	js      jetstream.JetStream
@@ -44,8 +46,10 @@ func NewClient(cfg *config.Config) (*Client, error) {
 		return nil, fmt.Errorf("jetstream init: %w", err)
 	}
 
-	// Derive HTTP monitoring URL from NATS URL
-	httpURL := deriveHTTPURL(cfg.NatsURL)
+	httpURL := cfg.NatsMonitoringURL
+	if httpURL == "" {
+		httpURL = deriveHTTPURL(cfg.NatsURL)
+	}
 
 	return &Client{
 		conn:    conn,
@@ -54,8 +58,8 @@ func NewClient(cfg *config.Config) (*Client, error) {
 	}, nil
 }
 
-func (c *Client) Conn() *nats.Conn  { return c.conn }
-func (c *Client) JS() jetstream.JetStream { return c.js }
+func (c *Client) Conn() *nats.Conn        { return c.conn }
+func (c *Client) JS() jetstream.JetStream  { return c.js }
 
 func (c *Client) Close() {
 	c.conn.Close()
@@ -93,7 +97,7 @@ func (c *Client) Subscribe(subject string) (*nats.Subscription, chan *nats.Msg, 
 // FetchMonitoring proxies HTTP monitoring API requests
 func (c *Client) FetchMonitoring(path string) (json.RawMessage, error) {
 	url := c.httpURL + path
-	resp, err := http.Get(url)
+	resp, err := httpClient.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("monitoring fetch %s: %w", path, err)
 	}

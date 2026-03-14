@@ -6,16 +6,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"nats-ui-backend/internal/config"
 	"nats-ui-backend/internal/middleware"
 )
+
+var oauth2HTTPClient = &http.Client{Timeout: 10 * time.Second}
 
 type OAuth2Provider struct {
 	Name         string `json:"name"`
@@ -93,7 +97,7 @@ func (h *OAuth2Handler) loadProviders() {
 			EmailField:   "email",
 		}
 		if err := discoverOIDC(h.cfg.OIDCIssuerURL, p); err != nil {
-			fmt.Printf("warning: OIDC discovery failed for %s: %v\n", h.cfg.OIDCIssuerURL, err)
+			log.Printf("warning: OIDC discovery failed for %s: %v", h.cfg.OIDCIssuerURL, err)
 		} else {
 			h.providers["oidc"] = p
 		}
@@ -103,7 +107,7 @@ func (h *OAuth2Handler) loadProviders() {
 // discoverOIDC fetches the OpenID Connect discovery document and populates provider URLs.
 func discoverOIDC(issuerURL string, p *OAuth2Provider) error {
 	discoveryURL := strings.TrimRight(issuerURL, "/") + "/.well-known/openid-configuration"
-	resp, err := http.Get(discoveryURL)
+	resp, err := oauth2HTTPClient.Get(discoveryURL)
 	if err != nil {
 		return fmt.Errorf("fetch discovery: %w", err)
 	}
@@ -242,13 +246,16 @@ func exchangeCode(p *OAuth2Provider, code, redirectURI string) (string, error) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := oauth2HTTPClient.Do(req)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read token response: %w", err)
+	}
 
 	var result map[string]any
 	if err := json.Unmarshal(body, &result); err != nil {
@@ -270,13 +277,16 @@ func getUserEmail(p *OAuth2Provider, accessToken string) (string, error) {
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := oauth2HTTPClient.Do(req)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read userinfo response: %w", err)
+	}
 
 	var result map[string]any
 	if err := json.Unmarshal(body, &result); err != nil {
@@ -302,7 +312,7 @@ func getGitHubEmail(accessToken string) (string, error) {
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := oauth2HTTPClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -313,7 +323,10 @@ func getGitHubEmail(accessToken string) (string, error) {
 		Primary  bool   `json:"primary"`
 		Verified bool   `json:"verified"`
 	}
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read github emails response: %w", err)
+	}
 	if err := json.Unmarshal(body, &emails); err != nil {
 		return "", err
 	}

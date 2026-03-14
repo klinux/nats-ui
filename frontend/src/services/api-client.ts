@@ -248,30 +248,56 @@ export async function fetchRoutes(): Promise<Record<string, unknown>> {
   return request('/server/routes');
 }
 
-// SSE Subscribe
+// SSE Subscribe with automatic reconnection and exponential backoff
 export function subscribeSSE(
   subject: string,
   onMessage: (msg: { subject: string; data: unknown; headers?: Record<string, string>; timestamp: number; reply?: string }) => void,
   onError?: (err: Event) => void
 ): () => void {
-  const token = getToken();
-  const url = `${API_BASE}/api/messages/subscribe?subject=${encodeURIComponent(subject)}&token=${encodeURIComponent(token || '')}`;
-  const es = new EventSource(url);
+  let es: EventSource | null = null;
+  let closed = false;
+  let retryDelay = 1000;
+  const maxRetryDelay = 30000;
+  let retryTimeout: ReturnType<typeof setTimeout> | null = null;
 
-  es.onmessage = (event) => {
-    try {
-      const msg = JSON.parse(event.data);
-      onMessage(msg);
-    } catch (e) {
-      console.error('Failed to parse SSE message:', e);
-    }
+  function connect() {
+    if (closed) return;
+    const token = getToken();
+    const url = `${API_BASE}/api/messages/subscribe?subject=${encodeURIComponent(subject)}&token=${encodeURIComponent(token || '')}`;
+    es = new EventSource(url);
+
+    es.onopen = () => {
+      retryDelay = 1000; // reset backoff on successful connection
+    };
+
+    es.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        onMessage(msg);
+      } catch (e) {
+        console.error('Failed to parse SSE message:', e);
+      }
+    };
+
+    es.onerror = (err) => {
+      onError?.(err);
+      es?.close();
+      if (!closed) {
+        retryTimeout = setTimeout(() => {
+          retryDelay = Math.min(retryDelay * 2, maxRetryDelay);
+          connect();
+        }, retryDelay);
+      }
+    };
+  }
+
+  connect();
+
+  return () => {
+    closed = true;
+    if (retryTimeout) clearTimeout(retryTimeout);
+    es?.close();
   };
-
-  es.onerror = (err) => {
-    onError?.(err);
-  };
-
-  return () => es.close();
 }
 
 // Health

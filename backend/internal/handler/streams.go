@@ -124,7 +124,11 @@ func (h *StreamsHandler) Create(c *gin.Context) {
 		return
 	}
 
-	info, _ := stream.Info(ctx)
+	info, err := stream.Info(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	c.JSON(http.StatusCreated, map[string]any{
 		"config": info.Config,
 		"state":  info.State,
@@ -180,7 +184,11 @@ func (h *StreamsHandler) Update(c *gin.Context) {
 		return
 	}
 
-	info, _ := stream.Info(ctx)
+	info, err := stream.Info(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	c.JSON(http.StatusOK, map[string]any{
 		"config": info.Config,
 		"state":  info.State,

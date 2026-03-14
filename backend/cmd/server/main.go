@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 
 	"github.com/gin-contrib/cors"
@@ -44,12 +45,27 @@ func main() {
 	}
 	r := gin.Default()
 
+	// CORS
+	origins := cfg.CORSOriginsList()
+	allowCredentials := origins[0] != "*"
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"*"},
+		AllowOrigins:     origins,
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Authorization", "Content-Type"},
-		AllowCredentials: true,
+		AllowCredentials: allowCredentials,
 	}))
+
+	// Rate limiting
+	rps, _ := strconv.ParseFloat(cfg.RateLimitRPS, 64)
+	if rps <= 0 {
+		rps = 20
+	}
+	r.Use(middleware.RateLimit(rps))
+
+	// Validation helpers
+	validateName := middleware.ValidatePathParam("name")
+	validateConsumer := middleware.ValidatePathParam("consumer")
+	validateBucket := middleware.ValidatePathParam("bucket")
 
 	// Public routes
 	api := r.Group("/api")
@@ -76,26 +92,26 @@ func main() {
 		// Streams
 		protected.GET("/streams", streamsH.List)
 		protected.POST("/streams", streamsH.Create)
-		protected.GET("/streams/:name", streamsH.Get)
-		protected.PUT("/streams/:name", streamsH.Update)
-		protected.DELETE("/streams/:name", streamsH.Delete)
-		protected.POST("/streams/:name/purge", streamsH.Purge)
-		protected.GET("/streams/:name/messages", streamsH.GetMessage)
+		protected.GET("/streams/:name", validateName, streamsH.Get)
+		protected.PUT("/streams/:name", validateName, streamsH.Update)
+		protected.DELETE("/streams/:name", validateName, streamsH.Delete)
+		protected.POST("/streams/:name/purge", validateName, streamsH.Purge)
+		protected.GET("/streams/:name/messages", validateName, streamsH.GetMessage)
 
 		// Consumers
-		protected.GET("/streams/:name/consumers", consumersH.List)
-		protected.POST("/streams/:name/consumers", consumersH.Create)
-		protected.GET("/streams/:name/consumers/:consumer", consumersH.Get)
-		protected.DELETE("/streams/:name/consumers/:consumer", consumersH.Delete)
+		protected.GET("/streams/:name/consumers", validateName, consumersH.List)
+		protected.POST("/streams/:name/consumers", validateName, consumersH.Create)
+		protected.GET("/streams/:name/consumers/:consumer", validateName, validateConsumer, consumersH.Get)
+		protected.DELETE("/streams/:name/consumers/:consumer", validateName, validateConsumer, consumersH.Delete)
 
 		// KV Store
 		protected.GET("/kv", kvH.ListBuckets)
 		protected.POST("/kv", kvH.CreateBucket)
-		protected.DELETE("/kv/:bucket", kvH.DeleteBucket)
-		protected.GET("/kv/:bucket/keys", kvH.ListKeys)
-		protected.GET("/kv/:bucket/keys/:key", kvH.GetValue)
-		protected.PUT("/kv/:bucket/keys/:key", kvH.PutValue)
-		protected.DELETE("/kv/:bucket/keys/:key", kvH.DeleteKey)
+		protected.DELETE("/kv/:bucket", validateBucket, kvH.DeleteBucket)
+		protected.GET("/kv/:bucket/keys", validateBucket, kvH.ListKeys)
+		protected.GET("/kv/:bucket/keys/:key", validateBucket, kvH.GetValue)
+		protected.PUT("/kv/:bucket/keys/:key", validateBucket, kvH.PutValue)
+		protected.DELETE("/kv/:bucket/keys/:key", validateBucket, kvH.DeleteKey)
 
 		// Messages
 		protected.POST("/messages/publish", messagesH.Publish)
