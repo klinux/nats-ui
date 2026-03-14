@@ -18,7 +18,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /nats-ui-server ./cmd/server
 
 # Stage 3: Final image
 FROM alpine:3.21
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates mailcap
 WORKDIR /app
 COPY --from=backend-builder /nats-ui-server .
 COPY --from=frontend-builder /app/frontend/dist ./static

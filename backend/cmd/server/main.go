@@ -152,13 +152,17 @@ func main() {
 	// Serve frontend static files
 	if _, err := os.Stat("./static"); err == nil {
 		r.Static("/assets", "./static/assets")
-		r.NoRoute(func(c *gin.Context) {
-			// Serve static file if it exists, otherwise fallback to SPA index.html
-			path := "./static" + c.Request.URL.Path
-			if info, err := os.Stat(path); err == nil && !info.IsDir() {
-				c.File(path)
-				return
+
+		// Serve known root-level static files explicitly
+		for _, name := range []string{"favicon.svg", "logo.svg", "favicon.ico"} {
+			filePath := "./static/" + name
+			if _, err := os.Stat(filePath); err == nil {
+				r.StaticFile("/"+name, filePath)
 			}
+		}
+
+		// SPA fallback for everything else
+		r.NoRoute(func(c *gin.Context) {
 			c.File("./static/index.html")
 		})
 	}
