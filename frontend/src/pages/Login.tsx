@@ -47,11 +47,7 @@ export function Login() {
     setLoading(true);
     try {
       await login(data.username, data.password);
-      await connect({
-        server: 'backend',
-        httpUrl: '/api',
-        timeout: 5000,
-      });
+      await connect();
       navigate('/');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Login failed');

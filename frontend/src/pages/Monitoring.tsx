@@ -7,7 +7,7 @@ import {
   Database,
   Clock,
 } from 'lucide-react';
-import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -16,149 +16,8 @@ import { useNats } from '../hooks/useNats';
 import { fetchNatsInfo, fetchNatsConnections, fetchJetStreamInfo } from '../services/nats-service';
 import { subjectTracker } from '../services/subject-tracker';
 import type { NatsServerInfo, NatsConnectionInfo, JetStreamInfo, SubjectData, TimeSeriesDataPoint } from '../types/monitoring';
+import { formatBytes, formatUptime } from '../lib/format';
 
-/*
-// Type definitions
-interface ServerInfo {
-  server_id: string;
-  version: string;
-  go: string;
-  host: string;
-  port: number;
-  auth_required?: boolean;
-  ssl_required?: boolean;
-  tls_required?: boolean;
-  max_payload: number;
-  proto: number;
-  client_id: number;
-  client_ip: string;
-  subscriptions: number;
-  connections: number;
-  total_connections: number;
-  routes: number;
-  remotes: number;
-  leafnodes: number;
-  in_msgs: number;
-  out_msgs: number;
-  in_bytes: number;
-  out_bytes: number;
-  slow_consumers: number;
-  uptime: string;
-  now: string;
-  jetstream?: unknown;
-}
-*/
-
-/*
-interface ConnectionInfo {
-  cid: number;
-  kind: string;
-  type: string;
-  start: string;
-  last_activity: string;
-  uptime: string;
-  idle: string;
-  pending_bytes: number;
-  in_msgs: number;
-  out_msgs: number;
-  in_bytes: number;
-  out_bytes: number;
-  subscriptions: number;
-  name?: string;
-  lang?: string;
-  version?: string;
-}
-*/
-
-/*
-interface ConnectionsResponse {
-  server_id: string;
-  now: string;
-  num_connections: number;
-  total: number;
-  offset: number;
-  limit: number;
-  connections: ConnectionInfo[];
-}
-*/
-
-/*
-interface JetStreamInfo {
-  memory: number;
-  storage: number;
-  streams: number;
-  consumers: number;
-  messages: number;
-  bytes: number;
-  meta_cluster?: {
-    name: string;
-    leader: string;
-    peer: string;
-    cluster_size: number;
-    replicas?: Array<{
-      name: string;
-      current: boolean;
-      active: number;
-    }>;
-  };
-  api?: {
-    total: number;
-    errors: number;
-  };
-}
-*/
-
-/*
-interface TimeSeriesDataPoint {
-  timestamp: string;
-  messages: number;
-  bytes: number;
-  connections: number;
-}
-*/
-
-/*
-interface SubjectDataPoint {
-  subject: string;
-  messages: number;
-  bytes: number;
-  lastActivity: string;
-}
-*/
-
-// Helper function to format bytes
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-}
-
-function formatUptime(uptimeStr: string): string {
-  if (!uptimeStr) return '0s';
-  
-  let totalSeconds = 0;
-  const dayMatch = uptimeStr.match(/(\d+)d/);
-  const hourMatch = uptimeStr.match(/(\d+)h/);
-  const minMatch = uptimeStr.match(/(\d+)m/);
-  const secMatch = uptimeStr.match(/(\d+)s/);
-  
-  if (dayMatch) totalSeconds += parseInt(dayMatch[1]) * 86400;
-  if (hourMatch) totalSeconds += parseInt(hourMatch[1]) * 3600;
-  if (minMatch) totalSeconds += parseInt(minMatch[1]) * 60;
-  if (secMatch) totalSeconds += parseInt(secMatch[1]);
-  
-  const days = Math.floor(totalSeconds / 86400);
-  const hours = Math.floor((totalSeconds % 86400) / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  
-  if (days > 0) return `${days}d ${hours}h ${minutes}m`;
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  if (minutes > 0) return `${minutes}m ${seconds}s`;
-  return `${seconds}s`;
-}
 
 interface MetricCardProps {
   title: string;
@@ -185,18 +44,18 @@ function MetricCard({ title, value, description, icon, trend, status = 'normal' 
   };
 
   return (
-    <Card className={getStatusColor()}>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+    <Card className={`gap-2 py-3 ${getStatusColor()}`}>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 px-4 pb-0">
+        <CardTitle className="text-xs font-medium text-muted-foreground">{title}</CardTitle>
         {icon}
       </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
+      <CardContent className="px-4">
+        <div className="text-xl font-bold">{value}</div>
         {description && (
-          <p className="text-xs text-muted-foreground">{description}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
         )}
         {trend && (
-          <div className="flex items-center pt-1">
+          <div className="flex items-center mt-1">
             <TrendingUp
               className={`mr-1 h-3 w-3 ${
                 trend.isPositive ? 'text-green-600' : 'text-red-600'
@@ -255,15 +114,21 @@ export function Monitoring() {
       
       // Add to metrics history for time series
       const now = new Date();
+      const inBytes = Number(info?.in_bytes) || 0;
+      const outBytes = Number(info?.out_bytes) || 0;
+      const inMsgs = Number(info?.in_msgs) || 0;
+      const connCount = Array.isArray(conns?.connections) ? conns.connections.length : 0;
+      const cpuPercent = Number(info?.cpu) || 0;
+      const memBytes = Number(info?.mem) || 0;
       const newMetric: TimeSeriesDataPoint = {
         time: now.toLocaleTimeString(),
-        messages: Number(info?.in_msgs || 0),
-        bytes: Number(info?.in_bytes || 0) + Number(info?.out_bytes || 0),
-        connections: Number(Array.isArray(conns?.connections) ? conns.connections.length : 0),
-        bytesIn: Number(info?.in_bytes || 0),
-        bytesOut: Number(info?.out_bytes || 0),
-        cpu: Math.floor(Math.random() * 30) + 10, // CPU not available in NATS API
-        memory: Math.floor(Math.random() * 20) + 40, // Memory not available in NATS API
+        messages: inMsgs,
+        bytes: inBytes + outBytes,
+        connections: connCount,
+        bytesIn: inBytes,
+        bytesOut: outBytes,
+        cpu: Math.round(cpuPercent * 100) / 100,
+        memory: memBytes,
       };
       
       setTimeSeriesData(prev => {
@@ -313,7 +178,7 @@ export function Monitoring() {
 
   if (!isConnected) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">Monitoring</h1>
@@ -332,7 +197,7 @@ export function Monitoring() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Monitoring</h1>
@@ -376,7 +241,7 @@ export function Monitoring() {
         />
       </div>
 
-      <Tabs defaultValue="performance" className="space-y-6">
+      <Tabs defaultValue="performance" className="space-y-4">
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="performance">Performance</TabsTrigger>
           <TabsTrigger value="connections">Connections</TabsTrigger>
@@ -384,112 +249,130 @@ export function Monitoring() {
           <TabsTrigger value="system">System</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="performance" className="space-y-6">
+        <TabsContent value="performance" className="space-y-4">
           <div className="grid gap-6 lg:grid-cols-2">
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MessageSquare className="h-5 w-5" />
+              <CardHeader className="pb-0">
+                <CardTitle className="flex items-center gap-2 text-sm">
+                  <MessageSquare className="h-4 w-4" />
                   Message Throughput
                 </CardTitle>
-                <CardDescription>
+                <CardDescription className="text-xs">
                   Messages processed over time
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={timeSeriesData.length > 0 ? timeSeriesData : []}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="time" />
-                    <YAxis />
-                    <Tooltip />
-                    <Line 
-                      type="monotone" 
-                      dataKey="messages" 
-                      stroke="#8884d8" 
-                      strokeWidth={2}
-                      dot={false}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
+                {timeSeriesData.length >= 2 ? (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <LineChart data={timeSeriesData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="time" />
+                      <YAxis />
+                      <Tooltip />
+                      <Line
+                        type="monotone"
+                        dataKey="messages"
+                        stroke="#8884d8"
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-[220px] text-sm text-muted-foreground">
+                    Collecting data...
+                  </div>
+                )}
               </CardContent>
             </Card>
 
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Activity className="h-5 w-5" />
+              <CardHeader className="pb-0">
+                <CardTitle className="flex items-center gap-2 text-sm">
+                  <Activity className="h-4 w-4" />
                   Data Transfer
                 </CardTitle>
-                <CardDescription>
+                <CardDescription className="text-xs">
                   Bytes in/out over time
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <AreaChart data={timeSeriesData.length > 0 ? timeSeriesData : []}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="time" />
-                    <YAxis />
-                    <Tooltip />
-                    <Area 
-                      type="monotone" 
-                      dataKey="bytesIn" 
-                      stackId="1"
-                      stroke="#82ca9d" 
-                      fill="#82ca9d" 
-                      fillOpacity={0.6}
-                    />
-                    <Area 
-                      type="monotone" 
-                      dataKey="bytesOut" 
-                      stackId="1"
-                      stroke="#8884d8" 
-                      fill="#8884d8" 
-                      fillOpacity={0.6}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
+                {timeSeriesData.length >= 2 ? (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <LineChart data={timeSeriesData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="time" />
+                      <YAxis />
+                      <Tooltip />
+                      <Line
+                        type="monotone"
+                        dataKey="bytesIn"
+                        stroke="#82ca9d"
+                        strokeWidth={2}
+                        name="Bytes In"
+                        dot={false}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="bytesOut"
+                        stroke="#8884d8"
+                        strokeWidth={2}
+                        name="Bytes Out"
+                        dot={false}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-[220px] text-sm text-muted-foreground">
+                    Collecting data...
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
         </TabsContent>
 
-        <TabsContent value="connections" className="space-y-6">
+        <TabsContent value="connections" className="space-y-4">
           <div className="grid gap-6 lg:grid-cols-2">
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5" />
+              <CardHeader className="pb-0">
+                <CardTitle className="flex items-center gap-2 text-sm">
+                  <Users className="h-4 w-4" />
                   Connection Activity
                 </CardTitle>
-                <CardDescription>
+                <CardDescription className="text-xs">
                   Connection count over time
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={timeSeriesData.length > 0 ? timeSeriesData : []}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="time" />
-                    <YAxis />
-                    <Tooltip />
-                    <Line 
-                      type="monotone" 
-                      dataKey="connections" 
-                      stroke="#ffc658" 
-                      strokeWidth={2}
-                      dot={false}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
+                {timeSeriesData.length >= 2 ? (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <LineChart data={timeSeriesData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="time" />
+                      <YAxis />
+                      <Tooltip />
+                      <Line
+                        type="monotone"
+                        dataKey="connections"
+                        stroke="#ffc658"
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-[220px] text-sm text-muted-foreground">
+                    Collecting data...
+                  </div>
+                )}
               </CardContent>
             </Card>
 
             <Card>
-              <CardHeader>
-                <CardTitle>Connection Details</CardTitle>
-                <CardDescription>
+              <CardHeader className="pb-0">
+                <CardTitle className="text-sm">Connection Details</CardTitle>
+                <CardDescription className="text-xs">
                   Current connection information
                 </CardDescription>
               </CardHeader>
@@ -523,32 +406,38 @@ export function Monitoring() {
           </div>
         </TabsContent>
 
-        <TabsContent value="subjects" className="space-y-6">
+        <TabsContent value="subjects" className="space-y-4">
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Database className="h-5 w-5" />
+            <CardHeader className="pb-0">
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <Database className="h-4 w-4" />
                 Subject Activity
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-xs">
                 Message distribution across subjects
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={400}>
-                <BarChart data={subjectData.length > 0 ? subjectData : []}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="messages" fill="#8884d8" />
-                </BarChart>
-              </ResponsiveContainer>
+              {subjectData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={subjectData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip />
+                    <Bar dataKey="messages" fill="#8884d8" />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-[280px] text-sm text-muted-foreground">
+                  No subject activity yet
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="system" className="space-y-6">
+        <TabsContent value="system" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-3">
             <MetricCard
               title="Data Out"
@@ -572,80 +461,105 @@ export function Monitoring() {
 
           <div className="grid gap-6 lg:grid-cols-2">
             <Card>
-              <CardHeader>
-                <CardTitle>CPU & Memory</CardTitle>
-                <CardDescription>
-                  System resource usage over time
+              <CardHeader className="pb-0">
+                <CardTitle className="text-sm">CPU Usage</CardTitle>
+                <CardDescription className="text-xs">
+                  NATS server CPU usage over time
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={timeSeriesData.length > 0 ? timeSeriesData : []}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="time" />
-                    <YAxis />
-                    <Tooltip />
-                    <Line 
-                      type="monotone" 
-                      dataKey="cpu" 
-                      stroke="#ff7c7c" 
-                      strokeWidth={2}
-                      name="CPU %"
-                      dot={false}
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="memory" 
-                      stroke="#8dd1e1" 
-                      strokeWidth={2}
-                      name="Memory %"
-                      dot={false}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
+                {timeSeriesData.length >= 2 ? (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <LineChart data={timeSeriesData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="time" />
+                      <YAxis unit="%" />
+                      <Tooltip formatter={(value: number) => [`${value}%`, 'CPU']} />
+                      <Line
+                        type="monotone"
+                        dataKey="cpu"
+                        stroke="#ff7c7c"
+                        strokeWidth={2}
+                        name="CPU %"
+                        dot={false}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-[220px] text-sm text-muted-foreground">
+                    Collecting data...
+                  </div>
+                )}
               </CardContent>
             </Card>
 
             <Card>
-              <CardHeader>
-                <CardTitle>System Health</CardTitle>
-                <CardDescription>
-                  Overall system status indicators
+              <CardHeader className="pb-0">
+                <CardTitle className="text-sm">Memory Usage</CardTitle>
+                <CardDescription className="text-xs">
+                  NATS server memory usage over time
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Server Status</span>
-                    <Badge variant="default" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
-                      {isConnected ? 'Healthy' : 'Disconnected'}
-                    </Badge>
+              <CardContent>
+                {timeSeriesData.length >= 2 ? (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <LineChart data={timeSeriesData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="time" />
+                      <YAxis tickFormatter={(v: number) => formatBytes(v)} />
+                      <Tooltip formatter={(value: number) => [formatBytes(value), 'Memory']} />
+                      <Line
+                        type="monotone"
+                        dataKey="memory"
+                        stroke="#8dd1e1"
+                        strokeWidth={2}
+                        name="Memory"
+                        dot={false}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-[220px] text-sm text-muted-foreground">
+                    Collecting data...
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">JetStream</span>
-                    <Badge variant={serverInfo?.jetstream !== undefined ? 'default' : 'secondary'} 
-                           className={serverInfo?.jetstream !== undefined ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : ''}>
-                      {serverInfo?.jetstream !== undefined ? 'Enabled' : 'Disabled'}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Server ID</span>
-                    <span className="text-xs font-mono truncate" title={serverInfo?.server_id}>
-                      {serverInfo?.server_id ? serverInfo.server_id.substring(0, 12) + '...' : 'N/A'}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Version</span>
-                    <span className="text-sm">{serverInfo?.version || 'N/A'}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Go Version</span>
-                    <span className="text-sm">{serverInfo?.go || 'N/A'}</span>
-                  </div>
-                </div>
+                )}
               </CardContent>
             </Card>
           </div>
+
+          <Card>
+            <CardHeader className="pb-0">
+              <CardTitle className="text-sm">System Health</CardTitle>
+              <CardDescription className="text-xs">
+                Overall system status indicators
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Server Status</span>
+                  <Badge variant="default" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
+                    {isConnected ? 'Healthy' : 'Disconnected'}
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">JetStream</span>
+                  <Badge variant={serverInfo?.jetstream !== undefined ? 'default' : 'secondary'}
+                         className={serverInfo?.jetstream !== undefined ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : ''}>
+                    {serverInfo?.jetstream !== undefined ? 'Enabled' : 'Disabled'}
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Version</span>
+                  <span className="text-sm">{serverInfo?.version || 'N/A'}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Go</span>
+                  <span className="text-sm">{serverInfo?.go || 'N/A'}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

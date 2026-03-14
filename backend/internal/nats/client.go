@@ -81,7 +81,10 @@ func (c *Client) Publish(subject string, data []byte, headers map[string]string)
 			msg.Header.Set(k, v)
 		}
 	}
-	return c.conn.PublishMsg(msg)
+	if err := c.conn.PublishMsg(msg); err != nil {
+		return err
+	}
+	return c.conn.Flush()
 }
 
 // Subscribe creates a subscription and sends messages to a channel

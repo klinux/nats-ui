@@ -62,6 +62,8 @@ func (h *MessagesHandler) Subscribe(c *gin.Context) {
 	c.Header("Connection", "keep-alive")
 	c.Header("X-Accel-Buffering", "no")
 
+	flusher, _ := c.Writer.(http.Flusher)
+
 	c.Stream(func(w io.Writer) bool {
 		select {
 		case msg := <-ch:
@@ -88,17 +90,25 @@ func (h *MessagesHandler) Subscribe(c *gin.Context) {
 			jsonData, err := json.Marshal(evt)
 			if err != nil {
 				fmt.Fprintf(w, "data: {\"error\":\"marshal failed\"}\n\n")
+				if flusher != nil {
+					flusher.Flush()
+				}
 				return true
 			}
 			fmt.Fprintf(w, "data: %s\n\n", jsonData)
+			if flusher != nil {
+				flusher.Flush()
+			}
 			return true
 
 		case <-c.Request.Context().Done():
 			return false
 
 		case <-time.After(30 * time.Second):
-			// keepalive
 			fmt.Fprintf(w, ": keepalive\n\n")
+			if flusher != nil {
+				flusher.Flush()
+			}
 			return true
 		}
 	})

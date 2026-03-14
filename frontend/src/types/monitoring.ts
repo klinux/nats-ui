@@ -28,6 +28,8 @@ export interface NatsServerInfo {
   now: string;
   jetstream?: boolean;
   max_connections?: number | string;
+  cpu?: number;
+  mem?: number;
 }
 
 export interface NatsConnectionInfo {

@@ -18,6 +18,7 @@ import { ConnectionStatus } from '../components/connection/ConnectionManager';
 import { useNats } from '../hooks/useNats';
 import { fetchNatsInfo, fetchNatsConnections, fetchJetStreamInfo } from '../services/nats-service';
 import { MetricCardSkeleton } from '../components/ui/skeletons';
+import { formatBytes, parseUptimeToSeconds, formatUptimeFromSeconds } from '../lib/format';
 import { staggerContainer, staggerItem, iconSpring, easings } from '../lib/animations';
 
 interface MetricCardProps {
@@ -89,7 +90,7 @@ function MetricCard({ title, value, description, icon, trend }: MetricCardProps)
 }
 
 export default function Dashboard() {
-  const { isConnected, status, error, config } = useNats();
+  const { isConnected, status, error } = useNats();
   const [serverInfo, setServerInfo] = useState<Record<string, unknown> | null>(null);
   const [connections, setConnections] = useState<Record<string, unknown> | null>(null);
   const [jetStreamInfo, setJetStreamInfo] = useState<Record<string, unknown> | null>(null);
@@ -159,71 +160,6 @@ export default function Dashboard() {
     }
   }, [isConnected]);
 
-  function parseUptimeToSeconds(uptimeStr: string): number {
-    if (!uptimeStr) return 0;
-    
-    let totalSeconds = 0;
-    const dayMatch = uptimeStr.match(/(\d+)d/);
-    const hourMatch = uptimeStr.match(/(\d+)h/);
-    const minMatch = uptimeStr.match(/(\d+)m/);
-    const secMatch = uptimeStr.match(/(\d+)s/);
-    
-    if (dayMatch) totalSeconds += parseInt(dayMatch[1]) * 86400;
-    if (hourMatch) totalSeconds += parseInt(hourMatch[1]) * 3600;
-    if (minMatch) totalSeconds += parseInt(minMatch[1]) * 60;
-    if (secMatch) totalSeconds += parseInt(secMatch[1]);
-    
-    return totalSeconds;
-  }
-
-  function formatUptimeFromSeconds(totalSeconds: number): string {
-    const days = Math.floor(totalSeconds / 86400);
-    const hours = Math.floor((totalSeconds % 86400) / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-    
-    if (days > 0) return `${days}d ${hours}h ${minutes}m`;
-    if (hours > 0) return `${hours}h ${minutes}m`;
-    if (minutes > 0) return `${minutes}m ${seconds}s`;
-    return `${seconds}s`;
-  }
-
-  // function formatUptime(uptimeStr: string): string {
-  //   if (!uptimeStr) return '0s';
-  //   
-  //   // Parse format like "34m32s" or "1h30m45s" or "2d5h30m"
-  //   let totalSeconds = 0;
-  //   
-  //   // Extract days (d), hours (h), minutes (m), seconds (s)
-  //   const dayMatch = uptimeStr.match(/(\d+)d/);
-  //   const hourMatch = uptimeStr.match(/(\d+)h/);
-  //   const minMatch = uptimeStr.match(/(\d+)m/);
-  //   const secMatch = uptimeStr.match(/(\d+)s/);
-  //   
-  //   if (dayMatch) totalSeconds += parseInt(dayMatch[1]) * 86400;
-  //   if (hourMatch) totalSeconds += parseInt(hourMatch[1]) * 3600;
-  //   if (minMatch) totalSeconds += parseInt(minMatch[1]) * 60;
-  //   if (secMatch) totalSeconds += parseInt(secMatch[1]);
-  //   
-  //   // Format back to readable format
-  //   const days = Math.floor(totalSeconds / 86400);
-  //   const hours = Math.floor((totalSeconds % 86400) / 3600);
-  //   const minutes = Math.floor((totalSeconds % 3600) / 60);
-  //   const seconds = totalSeconds % 60;
-  //   
-  //   if (days > 0) return `${days}d ${hours}h ${minutes}m`;
-  //   if (hours > 0) return `${hours}h ${minutes}m`;
-  //   if (minutes > 0) return `${minutes}m ${seconds}s`;
-  //   return `${seconds}s`;
-  // }
-
-  function formatBytes(bytes: number): string {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-  }
 
   // Calculate real-time uptime
   const getRealTimeUptime = (): string => {
@@ -275,7 +211,7 @@ export default function Dashboard() {
                 <div className="text-sm text-muted-foreground space-y-2">
                   <p>Common issues and solutions:</p>
                   <ul className="text-left space-y-1 max-w-md mx-auto">
-                    <li>• Check if NATS server is running at <span className="font-mono">{config.server}</span></li>
+                    <li>• Check if NATS server is running</li>
                     <li>• Verify WebSocket support is enabled on the server</li>
                     <li>• Ensure the server port is accessible and not blocked by firewall</li>
                     <li>• Check if the server URL and port are correct in settings</li>
@@ -287,11 +223,11 @@ export default function Dashboard() {
                 <p className="text-muted-foreground">
                   Connect to a NATS server to view the dashboard
                 </p>
-                
+
                 <div className="text-sm text-muted-foreground space-y-2">
                   <p>Common issues and solutions:</p>
                   <ul className="text-left space-y-1 max-w-md mx-auto">
-                    <li>• Check if NATS server is running at <span className="font-mono">{config.server}</span></li>
+                    <li>• Check if NATS server is running</li>
                     <li>• Verify WebSocket support is enabled on the server</li>
                     <li>• Ensure the server port is accessible and not blocked by firewall</li>
                     <li>• Check if the server URL and port are correct in settings</li>
@@ -349,7 +285,7 @@ export default function Dashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Server</p>
-                <p className="text-lg font-semibold">{config.server}</p>
+                <p className="text-lg font-semibold">Backend API</p>
               </div>
               <div className="text-right">
                 <p className="text-sm text-muted-foreground">Status</p>

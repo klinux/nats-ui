@@ -1,10 +1,25 @@
-import { useContext } from 'react';
-import { NatsContext, type NatsContextType } from '../contexts/nats-context';
+import { useNatsStore } from '@/stores/nats-store';
 
-export function useNats(): NatsContextType {
-  const context = useContext(NatsContext);
-  if (!context) {
-    throw new Error('useNats must be used within a NatsProvider');
-  }
-  return context;
+/**
+ * Convenience hook that provides the same interface as the old NatsContext.
+ * All state now lives in Zustand — this is just a selector wrapper.
+ */
+export function useNats() {
+  const connection = useNatsStore((s) => s.connection);
+  const status = useNatsStore((s) => s.status);
+  const error = useNatsStore((s) => s.error);
+  const isConnected = useNatsStore((s) => s.isConnected);
+  const username = useNatsStore((s) => s.username);
+  const connect = useNatsStore((s) => s.connect);
+  const disconnect = useNatsStore((s) => s.disconnect);
+
+  return {
+    connection,
+    status,
+    error,
+    isConnected,
+    username,
+    connect,
+    disconnect,
+  };
 }

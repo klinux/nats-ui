@@ -28,6 +28,7 @@ import { toast } from 'sonner';
 import { fetchJetStreamStreams } from '../services/nats-service';
 import { purgeStream, getStreamMessages, type StreamMessage } from '../services/api-client';
 import { TableRowSkeleton } from '../components/ui/skeletons';
+import { formatBytes } from '../lib/format';
 
 const createStreamSchema = z.object({
   name: z.string().min(1, 'Stream name is required').regex(/^[a-zA-Z0-9_-]+$/, 'Invalid stream name'),
@@ -81,13 +82,7 @@ function convertJetStreamData(jsData: Record<string, unknown>): StreamInfo {
   };
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
+
 
 function formatDuration(ms: number): string {
   if (ms === 0) return 'Forever';

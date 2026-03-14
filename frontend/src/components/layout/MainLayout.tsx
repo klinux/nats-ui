@@ -1,6 +1,4 @@
-import { Outlet, Link, useLocation } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { useTheme } from 'next-themes';
+import { Outlet, useLocation } from 'react-router-dom';
 import {
   Database,
   Home,
@@ -8,67 +6,45 @@ import {
   Settings,
   GitBranch,
   Users,
-  Moon,
-  Sun,
   Monitor,
-  Github,
-  LogOut,
 } from 'lucide-react';
-import { iconSpring } from '@/lib/animations';
 
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+} from '../ui/breadcrumb';
+import { Separator } from '../ui/separator';
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarInset,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
+  SidebarRail,
   SidebarTrigger,
 } from '../ui/sidebar';
-import { Button } from '../ui/button';
-import { useNats } from '../../hooks/useNats';
 import { Badge } from '../ui/badge';
-import { useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { clearToken } from '../../services/api-client';
+import { NavMain, type NavItem } from './nav-main';
+import { NavUser } from './nav-user';
+import { useNats } from '../../hooks/useNats';
 
-const navigationItems = [
-  {
-    title: 'Dashboard',
-    path: '/',
-    icon: Home,
-  },
-  {
-    title: 'Messages',
-    path: '/messages',
-    icon: MessageSquare,
-  },
-  {
-    title: 'Streams',
-    path: '/streams',
-    icon: GitBranch,
-  },
-  {
-    title: 'Consumers',
-    path: '/consumers',
-    icon: Users,
-  },
-  {
-    title: 'KV Store',
-    path: '/kv-store',
-    icon: Database,
-  },
-  {
-    title: 'Settings',
-    path: '/settings',
-    icon: Settings,
-  },
+const navItems: NavItem[] = [
+  { title: 'Dashboard', path: '/', icon: Home },
+  { title: 'Messages', path: '/messages', icon: MessageSquare },
+  { title: 'Streams', path: '/streams', icon: GitBranch },
+  { title: 'Consumers', path: '/consumers', icon: Users },
+  { title: 'KV Store', path: '/kv-store', icon: Database },
+];
+
+const systemItems: NavItem[] = [
+  { title: 'Monitoring', path: '/monitoring', icon: Monitor },
+  { title: 'Settings', path: '/settings', icon: Settings },
 ];
 
 const getStatusColor = (status: string) => {
@@ -77,8 +53,6 @@ const getStatusColor = (status: string) => {
       return 'bg-green-500';
     case 'connecting':
       return 'bg-yellow-500';
-    case 'disconnected':
-      return 'bg-gray-500';
     case 'error':
       return 'bg-red-500';
     default:
@@ -91,213 +65,100 @@ const getStatusText = (status: string) => {
     case 'connected':
       return 'Connected';
     case 'connecting':
-      return 'Connecting';
-    case 'disconnected':
-      return 'Disconnected';
+      return 'Connecting...';
     case 'error':
       return 'Error';
     default:
-      return 'Unknown';
+      return 'Disconnected';
   }
 };
 
+const allItems = [...navItems, ...systemItems];
+
 export function MainLayout() {
   const location = useLocation();
-  const navigate = useNavigate();
-  const { theme, setTheme } = useTheme();
-  const { status, disconnect } = useNats();
+  const { status, username } = useNats();
 
-  const handleLogout = useCallback(async () => {
-    clearToken();
-    await disconnect();
-    navigate('/login');
-  }, [disconnect, navigate]);
-
-  const cycleTheme = () => {
-    if (theme === 'light') setTheme('dark');
-    else if (theme === 'dark') setTheme('system');
-    else setTheme('light'); // system → light
-  };
-
-  const getThemeIcon = () => {
-    if (theme === 'light') return <Sun className="h-4 w-4" />;
-    if (theme === 'dark') return <Moon className="h-4 w-4" />;
-    return <Monitor className="h-4 w-4" />; // system
-  };
-
-  const getThemeTooltip = () => {
-    if (theme === 'light') return 'Switch to dark mode';
-    if (theme === 'dark') return 'Switch to system mode';
-    return 'Switch to light mode'; // system
-  };
+  const currentPage =
+    allItems.find((item) => item.path === location.pathname)?.title || 'NATS UI';
 
   return (
     <SidebarProvider>
-      <div className="flex h-screen w-full">
-        <Sidebar variant="inset" collapsible="icon">
-          <SidebarHeader className="border-b border-sidebar-border">
-            <div className="flex items-center gap-2 px-4 py-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2">
-              <div className="flex items-center gap-2">
-                <motion.div
-                  className="rounded-lg bg-primary p-2"
-                  whileHover={{ scale: 1.05, rotate: 3 }}
-                  transition={iconSpring}
-                >
-                  <Database className="h-4 w-4 text-primary-foreground" />
-                </motion.div>
-                <div className="flex flex-col group-data-[collapsible=icon]:hidden">
-                  <h1 className="text-sm font-semibold">NATS UI</h1>
-                  <div className="flex items-center gap-2">
-                    <motion.div
-                      className={`h-2 w-2 rounded-full ${getStatusColor(status)}`}
-                      animate={status === 'connected' ? {
-                        scale: [1, 1.1, 1],
-                        transition: {
-                          duration: 2,
-                          repeat: Infinity,
-                          ease: [0.4, 0.0, 0.2, 1]
-                        }
-                      } : {}}
-                    />
-                    <span className="text-xs text-muted-foreground">
+      <Sidebar collapsible="icon">
+        <SidebarHeader>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton size="lg" asChild>
+                <div className="cursor-default">
+                  <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+                    <Database className="size-4" />
+                  </div>
+                  <div className="grid flex-1 text-left text-sm leading-tight">
+                    <span className="truncate font-semibold">NATS UI</span>
+                    <span className="truncate text-xs flex items-center gap-1.5">
+                      <span
+                        className={`inline-block h-1.5 w-1.5 rounded-full ${getStatusColor(status)}`}
+                      />
                       {getStatusText(status)}
                     </span>
                   </div>
                 </div>
-              </div>
-            </div>
-          </SidebarHeader>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarHeader>
 
-          <SidebarContent>
-            <SidebarGroup>
-              <SidebarGroupLabel>Navigation</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {navigationItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location.pathname === item.path;
+        <SidebarContent>
+          <NavMain items={navItems} label="JetStream" />
+          <NavMain items={systemItems} label="System" />
+        </SidebarContent>
 
-                    return (
-                      <SidebarMenuItem key={item.path}>
-                        <SidebarMenuButton
-                          asChild
-                          isActive={isActive}
-                          tooltip={item.title}
-                        >
-                          <motion.div whileHover="hover" className="flex items-center gap-2">
-                            <Link to={item.path} className="flex items-center gap-2 w-full">
-                              <motion.div
-                                variants={{
-                                  hover: { scale: 1.1, rotate: 3 }
-                                }}
-                                transition={iconSpring}
-                                className="flex items-center justify-center"
-                              >
-                                <Icon className="h-4 w-4" />
-                              </motion.div>
-                              <span>{item.title}</span>
-                            </Link>
-                          </motion.div>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    );
-                  })}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          </SidebarContent>
+        <SidebarFooter>
+          <NavUser username={username || 'admin'} />
+        </SidebarFooter>
+        <SidebarRail />
+      </Sidebar>
 
-          <SidebarFooter className="border-t border-sidebar-border">
-            <div className="flex items-center justify-between p-2 group-data-[collapsible=icon]:justify-center">
-              <Badge variant="outline" className="text-xs group-data-[collapsible=icon]:hidden">
-                v{__APP_VERSION__}
-              </Badge>
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => window.open('https://github.com/klinux/nats-ui', '_blank')}
-                  className="h-8 w-8"
-                  title="View on GitHub"
-                >
-                  <motion.div
-                    whileHover={{ scale: 1.1, rotate: 3 }}
-                    transition={iconSpring}
-                  >
-                    <Github className="h-4 w-4" />
-                  </motion.div>
-                  <span className="sr-only">View on GitHub</span>
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={cycleTheme}
-                  className="h-8 w-8"
-                  title={getThemeTooltip()}
-                >
-                  <motion.div
-                    key={theme}
-                    initial={{ rotate: -180, opacity: 0 }}
-                    animate={{ rotate: 0, opacity: 1 }}
-                    exit={{ rotate: 180, opacity: 0 }}
-                    transition={{ duration: 0.3 }}
-                  >
-                    {getThemeIcon()}
-                  </motion.div>
-                  <span className="sr-only">Cycle theme</span>
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleLogout}
-                  className="h-8 w-8"
-                  title="Logout"
-                >
-                  <motion.div
-                    whileHover={{ scale: 1.1, rotate: 3 }}
-                    transition={iconSpring}
-                  >
-                    <LogOut className="h-4 w-4" />
-                  </motion.div>
-                  <span className="sr-only">Logout</span>
-                </Button>
-              </div>
-            </div>
-          </SidebarFooter>
-        </Sidebar>
-
-        <SidebarInset className="flex flex-1 flex-col overflow-hidden">
-          <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+      <SidebarInset>
+        <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
+          <div className="flex items-center gap-2 px-4">
             <SidebarTrigger className="-ml-1" />
-            <div className="flex flex-1 items-center justify-between">
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg font-semibold">
-                  {navigationItems.find(item => item.path === location.pathname)?.title || 'NATS UI'}
-                </h2>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge
-                  variant={
-                    status === 'connected' ? 'default' :
-                    status === 'connecting' ? 'secondary' :
-                    status === 'error' ? 'destructive' :
-                    'outline'
-                  }
-                  className={`text-xs ${
-                    status === 'connected' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : ''
-                  }`}
-                >
-                  NATS: {getStatusText(status)}
-                </Badge>
-              </div>
-            </div>
-          </header>
+            <Separator
+              orientation="vertical"
+              className="mr-2 data-[orientation=vertical]:h-4"
+            />
+            <Breadcrumb>
+              <BreadcrumbList>
+                <BreadcrumbItem>
+                  <BreadcrumbPage>{currentPage}</BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
+          </div>
+          <div className="ml-auto pr-4">
+            <Badge
+              variant={
+                status === 'connected'
+                  ? 'default'
+                  : status === 'error'
+                    ? 'destructive'
+                    : 'outline'
+              }
+              className={
+                status === 'connected'
+                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
+                  : ''
+              }
+            >
+              NATS: {getStatusText(status)}
+            </Badge>
+          </div>
+        </header>
 
-          <main className="flex-1 overflow-auto p-4">
-            <Outlet />
-          </main>
-        </SidebarInset>
-      </div>
+        <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+          <Outlet />
+        </div>
+      </SidebarInset>
     </SidebarProvider>
   );
 }

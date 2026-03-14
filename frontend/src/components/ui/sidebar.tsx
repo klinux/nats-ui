@@ -284,7 +284,7 @@ function SidebarTrigger({
         }}
         className="flex items-center justify-center"
       >
-        <PanelLeftIcon />
+        <PanelLeftIcon className="size-4" />
       </motion.div>
       <span className="sr-only">Toggle Sidebar</span>
     </Button>
@@ -711,6 +711,7 @@ function SidebarMenuSubButton({
 }
 
 export {
+  useSidebar,
   Sidebar,
   SidebarContent,
   SidebarFooter,

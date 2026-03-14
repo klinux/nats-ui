@@ -23,5 +23,17 @@ dist-ssr
 *.sln
 *.sw?
 
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Go
+backend/tmp/
+backend/bin/
+
+# Dev logs and PIDs
+.dev-logs/
+
 # Claude Code project instructions
 CLAUDE.md

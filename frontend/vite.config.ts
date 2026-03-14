@@ -25,6 +25,17 @@ export default defineConfig(({ mode }) => ({
   },
   server: {
     proxy: {
+      '/api/messages/subscribe': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        // SSE: disable response buffering so events stream immediately
+        configure: (proxy) => {
+          proxy.on('proxyRes', (proxyRes) => {
+            proxyRes.headers['cache-control'] = 'no-cache';
+            proxyRes.headers['x-accel-buffering'] = 'no';
+          });
+        },
+      },
       '/api': {
         target: 'http://localhost:8080',
         changeOrigin: true,

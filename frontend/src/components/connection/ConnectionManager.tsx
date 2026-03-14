@@ -9,10 +9,7 @@ export function ConnectionStatus() {
 
   const handleConnect = async () => {
     try {
-      await connect({
-        server: 'backend',
-        timeout: 5000,
-      });
+      await connect();
     } catch (err) {
       console.error('Connection failed:', err);
     }
