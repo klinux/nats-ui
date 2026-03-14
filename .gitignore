@@ -38,4 +38,4 @@ backend/server
 .pid-*
 
 # Claude Code project instructions
-CLAUDE.md
+**/CLAUDE.md
