@@ -38,6 +38,7 @@ import { NavMain, type NavItem } from './nav-main';
 import { NavUser } from './nav-user';
 import { useNats } from '../../hooks/useNats';
 import { CommandPalette } from '../command-palette/CommandPalette';
+import { NatsIcon } from '../ui/nats-icon';
 
 const navItems: NavItem[] = [
   { title: 'Dashboard', path: '/', icon: Home },
@@ -99,7 +100,7 @@ export function MainLayout() {
             <SidebarMenuItem>
               <SidebarMenuButton size="lg" asChild>
                 <div className="cursor-default">
-                  <img src="/favicon.svg" alt="NATS UI" className="size-8 shrink-0 rounded-lg" />
+                  <NatsIcon className="size-8 rounded-lg" />
                   <div className="grid flex-1 text-left text-sm leading-tight">
                     <span className="truncate font-semibold">NATS UI</span>
                     <span className="truncate text-xs flex items-center gap-1.5">

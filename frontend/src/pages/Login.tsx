@@ -14,6 +14,7 @@ import { Separator } from '../components/ui/separator';
 import { useNats } from '../hooks/useNats';
 import { login, getOAuth2Providers, getOAuth2AuthorizeURL, hasToken } from '../services/api-client';
 import { toast } from 'sonner';
+import { NatsIcon } from '../components/ui/nats-icon';
 
 const loginSchema = z.object({
   username: z.string().min(1, 'Username is required'),
@@ -88,7 +89,7 @@ export function Login() {
         className="w-full max-w-md"
       >
         <div className="flex items-center justify-center gap-3 mb-8">
-          <img src="/favicon.svg" alt="NATS UI" className="h-12 w-12 rounded-lg" />
+          <NatsIcon className="h-12 w-12 rounded-lg" />
           <div>
             <h1 className="text-2xl font-bold">NATS UI</h1>
             <p className="text-sm text-muted-foreground">Management Dashboard</p>
