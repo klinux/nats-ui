@@ -110,13 +110,13 @@ export function ConsumerDetail({ consumer, onClose, onRefresh, getActivityStatus
     <Dialog open onOpenChange={() => onClose()}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            Consumer: {consumer.name}
+          <DialogTitle className="flex items-center gap-2 min-w-0">
+            <Users className="h-5 w-5 shrink-0" />
+            <span className="truncate" title={consumer.name}>Consumer: {consumer.name}</span>
             {consumer.paused ? (
-              <Badge className="bg-yellow-500 text-white">Paused</Badge>
+              <Badge className="bg-yellow-500 text-white shrink-0">Paused</Badge>
             ) : (
-              <Badge className="bg-green-500 text-white">Active</Badge>
+              <Badge className="bg-green-500 text-white shrink-0">Active</Badge>
             )}
           </DialogTitle>
           <DialogDescription>
@@ -191,7 +191,14 @@ function ConfigAndTimestamps({ consumer, activity }: { consumer: Consumer; activ
           <CardTitle className="text-sm">Configuration</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          <DetailRow label="Stream" value={<Badge variant="outline">{consumer.stream}</Badge>} />
+          <DetailRow
+            label="Stream"
+            value={
+              <Badge variant="outline" className="max-w-full truncate" title={consumer.stream}>
+                {consumer.stream}
+              </Badge>
+            }
+          />
           <DetailRow label="Subject" value={consumer.subject} />
           <DetailRow label="Deliver Policy" value={consumer.deliverPolicy} />
           <DetailRow label="Ack Policy" value={consumer.ackPolicy} />
@@ -259,10 +266,12 @@ function PullMessagesSection({
           <div className="max-h-48 overflow-y-auto space-y-2">
             {messages.map((msg, i) => (
               <div key={i} className="p-2 rounded border text-xs space-y-1">
-                <div className="flex items-center justify-between">
-                  <Badge variant="outline" className="text-[10px]">seq: {msg.sequence}</Badge>
-                  <span className="font-mono text-muted-foreground">{msg.subject}</span>
-                  <span className="text-muted-foreground">
+                <div className="flex items-center justify-between gap-2 min-w-0">
+                  <Badge variant="outline" className="text-[10px] shrink-0">seq: {msg.sequence}</Badge>
+                  <span className="font-mono text-muted-foreground truncate" title={msg.subject}>
+                    {msg.subject}
+                  </span>
+                  <span className="text-muted-foreground shrink-0">
                     {new Date(msg.timestamp).toLocaleTimeString()}
                   </span>
                 </div>
@@ -289,9 +298,13 @@ function MetricCard({ label, value, className }: { label: string; value: number;
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex justify-between items-center">
-      <span className="text-sm text-muted-foreground">{label}:</span>
-      {typeof value === 'string' ? <span className="text-sm font-medium">{value}</span> : value}
+    <div className="flex justify-between items-center gap-2 min-w-0">
+      <span className="text-sm text-muted-foreground shrink-0">{label}:</span>
+      {typeof value === 'string' ? (
+        <span className="text-sm font-medium truncate text-right" title={value}>{value}</span>
+      ) : (
+        <div className="min-w-0 truncate text-right">{value}</div>
+      )}
     </div>
   );
 }
