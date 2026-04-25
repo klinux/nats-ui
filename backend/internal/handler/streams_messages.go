@@ -77,8 +77,6 @@ func (h *StreamsHandler) GetMessages(c *gin.Context) {
 		if last > maxMessageLimit {
 			last = maxMessageLimit
 		}
-		consumerCfg.DeliverPolicy = jetstream.DeliverLastPerSubjectPolicy
-		// For "last N" we use DeliverAll and calculate start seq
 		info, err := stream.Info(ctx)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -88,12 +86,8 @@ func (h *StreamsHandler) GetMessages(c *gin.Context) {
 			c.JSON(http.StatusOK, []map[string]any{})
 			return
 		}
-		startSeq := info.State.LastSeq - uint64(last) + 1
-		if startSeq < info.State.FirstSeq {
-			startSeq = info.State.FirstSeq
-		}
 		consumerCfg.DeliverPolicy = jetstream.DeliverByStartSequencePolicy
-		consumerCfg.OptStartSeq = startSeq
+		consumerCfg.OptStartSeq = lastNStartSeq(info.State.FirstSeq, info.State.LastSeq, uint64(last))
 		limit = last
 
 	default:
@@ -153,6 +147,20 @@ func (h *StreamsHandler) GetMessages(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, messages)
+}
+
+// lastNStartSeq returns the stream sequence to start delivery from in order to
+// fetch the last `last` messages, clamped to [firstSeq, lastSeq] and guarded
+// against uint64 underflow when the stream has fewer messages than requested.
+func lastNStartSeq(firstSeq, lastSeq, last uint64) uint64 {
+	if last == 0 || last >= lastSeq {
+		return firstSeq
+	}
+	start := lastSeq - last + 1
+	if start < firstSeq {
+		return firstSeq
+	}
+	return start
 }
 
 func parseIntQuery(c *gin.Context, key string, defaultVal int) int {

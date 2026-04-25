@@ -33,6 +33,7 @@ export function MessageBrowser({ streamName, onClose }: MessageBrowserProps) {
   const [subjectFilter, setSubjectFilter] = useState('');
   const [startTime, setStartTime] = useState('');
   const [expandedSeqs, setExpandedSeqs] = useState<Set<number>>(new Set());
+  const [hasFetched, setHasFetched] = useState(false);
 
   const fetchMessages = useCallback(async () => {
     if (!streamName) return;
@@ -52,6 +53,7 @@ export function MessageBrowser({ streamName, onClose }: MessageBrowserProps) {
       setMessages([]);
     } finally {
       setLoading(false);
+      setHasFetched(true);
     }
   }, [streamName, filterMode, limit, lastN, sequence, subjectFilter, startTime]);
 
@@ -150,7 +152,7 @@ export function MessageBrowser({ streamName, onClose }: MessageBrowserProps) {
             </div>
           ) : messages.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
-              {messages.length === 0 ? 'Click "Fetch Messages" to load messages' : 'No messages found'}
+              {hasFetched ? 'No messages found' : 'Click "Fetch Messages" to load messages'}
             </div>
           ) : (
             <Table>
