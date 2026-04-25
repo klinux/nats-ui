@@ -110,7 +110,7 @@ func main() {
 		protected.DELETE("/streams/:name", validateName, streamsH.Delete)
 		protected.POST("/streams/:name/purge", validateName, streamsH.Purge)
 		protected.POST("/streams/:name/seal", validateName, streamsH.Seal)
-		protected.GET("/streams/:name/messages", validateName, streamsH.GetMessage)
+		protected.GET("/streams/:name/messages", validateName, streamsH.GetMessages)
 
 		// Consumers
 		protected.GET("/streams/:name/consumers", validateName, consumersH.List)
