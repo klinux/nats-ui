@@ -6,7 +6,7 @@ import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '../ui/sheet';
 import { toast } from 'sonner';
 import { pauseConsumer, resumeConsumer } from '../../services/api-client';
 import { fetchNextMessages, type PulledMessage } from '../../services/api-client-extended';
@@ -107,10 +107,13 @@ export function ConsumerDetail({ consumer, onClose, onRefresh, getActivityStatus
   const lagLabel = getLagLabel(consumer.pending);
 
   return (
-    <Dialog open onOpenChange={() => onClose()}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-x-hidden overflow-y-auto">
-        <DialogHeader className="min-w-0">
-          <DialogTitle className="flex items-center gap-2 min-w-0 pr-6">
+    <Sheet open onOpenChange={() => onClose()}>
+      <SheetContent
+        side="right"
+        className="flex w-full flex-col gap-0 overflow-x-hidden p-0 sm:w-1/2 sm:max-w-none"
+      >
+        <SheetHeader className="border-b">
+          <SheetTitle className="flex min-w-0 items-center gap-2 pr-6">
             <Users className="h-5 w-5 shrink-0" />
             {consumer.paused ? (
               <Badge className="bg-yellow-500 text-white shrink-0">Paused</Badge>
@@ -118,13 +121,13 @@ export function ConsumerDetail({ consumer, onClose, onRefresh, getActivityStatus
               <Badge className="bg-green-500 text-white shrink-0">Active</Badge>
             )}
             <span className="min-w-0 flex-1 truncate" title={consumer.name}>Consumer: {consumer.name}</span>
-          </DialogTitle>
-          <DialogDescription>
+          </SheetTitle>
+          <SheetDescription>
             Detailed information and statistics for this consumer
-          </DialogDescription>
-        </DialogHeader>
+          </SheetDescription>
+        </SheetHeader>
 
-        <div className="space-y-6">
+        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-4">
           <MetricsGrid consumer={consumer} />
           <LagIndicator lagColor={lagColor} lagLabel={lagLabel} pending={consumer.pending} />
           <ConfigAndTimestamps consumer={consumer} activity={activity} />
@@ -137,24 +140,24 @@ export function ConsumerDetail({ consumer, onClose, onRefresh, getActivityStatus
             pulling={pulling}
             messages={pulledMessages}
           />
-
-          {/* Actions */}
-          <div className="flex items-center gap-3 pt-4 border-t">
-            {consumer.paused ? (
-              <Button onClick={handleResume} disabled={loading} size="sm">
-                <Play className="mr-2 h-4 w-4" />
-                Resume Consumer
-              </Button>
-            ) : (
-              <Button onClick={handlePause} disabled={loading} variant="secondary" size="sm">
-                <Pause className="mr-2 h-4 w-4" />
-                Pause Consumer
-              </Button>
-            )}
-          </div>
         </div>
-      </DialogContent>
-    </Dialog>
+
+        {/* Actions */}
+        <div className="flex items-center gap-3 border-t p-4">
+          {consumer.paused ? (
+            <Button onClick={handleResume} disabled={loading} size="sm">
+              <Play className="mr-2 h-4 w-4" />
+              Resume Consumer
+            </Button>
+          ) : (
+            <Button onClick={handlePause} disabled={loading} variant="secondary" size="sm">
+              <Pause className="mr-2 h-4 w-4" />
+              Pause Consumer
+            </Button>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
