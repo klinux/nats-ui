@@ -6,8 +6,8 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import {
-  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
-} from '../ui/dialog';
+  Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle,
+} from '../ui/sheet';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { JsonViewer } from '../ui/json-viewer';
@@ -69,19 +69,23 @@ export function MessageBrowser({ streamName, onClose }: MessageBrowserProps) {
   if (!streamName) return null;
 
   return (
-    <Dialog open={!!streamName} onOpenChange={() => onClose()}>
-      <DialogContent className="max-w-5xl max-h-[85vh]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Eye className="h-5 w-5" /> Browse Messages: {streamName}
-          </DialogTitle>
-          <DialogDescription>
+    <Sheet open={!!streamName} onOpenChange={() => onClose()}>
+      <SheetContent
+        side="right"
+        className="flex w-full flex-col gap-0 p-0 sm:w-1/2 sm:max-w-none"
+      >
+        <SheetHeader className="border-b">
+          <SheetTitle className="flex min-w-0 items-center gap-2 pr-6">
+            <Eye className="h-5 w-5 shrink-0" />
+            <span className="truncate" title={streamName}>Browse Messages: {streamName}</span>
+          </SheetTitle>
+          <SheetDescription>
             Replay and browse messages stored in this stream
-          </DialogDescription>
-        </DialogHeader>
+          </SheetDescription>
+        </SheetHeader>
 
         {/* Filter controls */}
-        <div className="space-y-3 border rounded-lg p-4">
+        <div className="space-y-3 border-b p-4">
           <div className="flex items-end gap-4 flex-wrap">
             <Tabs value={filterMode} onValueChange={(v) => setFilterMode(v as FilterMode)} className="flex-1">
               <TabsList className="grid w-full grid-cols-4">
@@ -145,7 +149,7 @@ export function MessageBrowser({ streamName, onClose }: MessageBrowserProps) {
         </div>
 
         {/* Messages list */}
-        <div className="overflow-auto max-h-[50vh]">
+        <div className="min-h-0 flex-1 overflow-auto">
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full" />
@@ -177,9 +181,9 @@ export function MessageBrowser({ streamName, onClose }: MessageBrowserProps) {
                         onClick={() => toggleExpand(msg.sequence)}
                       >
                         {expandedSeqs.has(msg.sequence) ? (
-                          <JsonViewer data={msg.data} defaultExpanded className="max-w-lg" />
+                          <JsonViewer data={msg.data} defaultExpanded />
                         ) : (
-                          <pre className="text-xs max-w-md truncate font-mono bg-muted p-1 rounded">
+                          <pre className="text-xs truncate font-mono bg-muted p-1 rounded">
                             {typeof msg.data === 'string' ? msg.data : JSON.stringify(msg.data)}
                           </pre>
                         )}
@@ -194,7 +198,7 @@ export function MessageBrowser({ streamName, onClose }: MessageBrowserProps) {
             </Table>
           )}
         </div>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }
