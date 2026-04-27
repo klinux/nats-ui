@@ -110,14 +110,14 @@ export function ConsumerDetail({ consumer, onClose, onRefresh, getActivityStatus
     <Dialog open onOpenChange={() => onClose()}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 min-w-0">
+          <DialogTitle className="flex items-center gap-2 min-w-0 pr-6">
             <Users className="h-5 w-5 shrink-0" />
-            <span className="truncate" title={consumer.name}>Consumer: {consumer.name}</span>
             {consumer.paused ? (
               <Badge className="bg-yellow-500 text-white shrink-0">Paused</Badge>
             ) : (
               <Badge className="bg-green-500 text-white shrink-0">Active</Badge>
             )}
+            <span className="truncate" title={consumer.name}>Consumer: {consumer.name}</span>
           </DialogTitle>
           <DialogDescription>
             Detailed information and statistics for this consumer
