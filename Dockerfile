@@ -1,9 +1,13 @@
 # Stage 1: Build frontend
 FROM node:22-alpine AS frontend-builder
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# pnpm version comes from the "packageManager" field in frontend/package.json.
+# Do not use pnpm@latest: an unpinned upgrade broke the image build once already.
+RUN corepack enable
 ARG APP_VERSION=""
 WORKDIR /app/frontend
-COPY frontend/package.json frontend/pnpm-lock.yaml ./
+# pnpm-workspace.yaml carries the approved/ignored build-script policy and must
+# be present before install, otherwise pnpm fails with ERR_PNPM_IGNORED_BUILDS.
+COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY frontend/ .
 RUN APP_VERSION=${APP_VERSION} pnpm build

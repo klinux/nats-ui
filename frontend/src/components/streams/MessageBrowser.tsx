@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Eye } from 'lucide-react';
+import { ChevronDown, ChevronRight, Eye } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -11,6 +11,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { JsonViewer } from '../ui/json-viewer';
+import { cn } from '@/lib/utils';
 import { replayStreamMessages, type StreamMessage } from '../../services/api-client';
 import { toast } from 'sonner';
 
@@ -176,18 +177,11 @@ export function MessageBrowser({ streamName, onClose }: MessageBrowserProps) {
                       <Badge variant="secondary" className="text-xs">{msg.subject}</Badge>
                     </TableCell>
                     <TableCell>
-                      <div
-                        className="cursor-pointer"
-                        onClick={() => toggleExpand(msg.sequence)}
-                      >
-                        {expandedSeqs.has(msg.sequence) ? (
-                          <JsonViewer data={msg.data} defaultExpanded />
-                        ) : (
-                          <pre className="text-xs truncate font-mono bg-muted p-1 rounded">
-                            {typeof msg.data === 'string' ? msg.data : JSON.stringify(msg.data)}
-                          </pre>
-                        )}
-                      </div>
+                      <MessageDataCell
+                        message={msg}
+                        expanded={expandedSeqs.has(msg.sequence)}
+                        onToggle={() => toggleExpand(msg.sequence)}
+                      />
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground align-top">
                       {new Date(msg.timestamp).toLocaleString()}
@@ -200,5 +194,49 @@ export function MessageBrowser({ streamName, onClose }: MessageBrowserProps) {
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+interface MessageDataCellProps {
+  message: StreamMessage;
+  expanded: boolean;
+  onToggle: () => void;
+}
+
+/**
+ * Renders a message payload with a dedicated expand/collapse toggle.
+ *
+ * The toggle deliberately sits *next to* the JSON tree instead of wrapping it:
+ * when it wrapped the tree, every click inside a nested node bubbled up and
+ * collapsed the whole message, making nested content impossible to inspect.
+ */
+function MessageDataCell({ message, expanded, onToggle }: MessageDataCellProps) {
+  const preview = typeof message.data === 'string' ? message.data : JSON.stringify(message.data);
+
+  return (
+    <div className="flex items-start gap-1">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        aria-label={`${expanded ? 'Collapse' : 'Expand'} message ${message.sequence}`}
+        className={cn(
+          'flex items-start gap-1 rounded text-left hover:bg-muted/50',
+          expanded ? 'shrink-0' : 'min-w-0 flex-1',
+        )}
+      >
+        {expanded ? (
+          <ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+        ) : (
+          <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+        )}
+        {!expanded && (
+          <pre className="min-w-0 flex-1 truncate rounded bg-muted p-1 font-mono text-xs">
+            {preview}
+          </pre>
+        )}
+      </button>
+      {expanded && <JsonViewer data={message.data} defaultExpanded className="min-w-0 flex-1" />}
+    </div>
   );
 }

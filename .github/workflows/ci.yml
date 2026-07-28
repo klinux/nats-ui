@@ -42,8 +42,11 @@ jobs:
         with:
           node-version: 22
 
+      # Version comes from the "packageManager" field in frontend/package.json.
+      # Do not use pnpm@latest: an unpinned upgrade broke CI once already.
       - name: Install pnpm
-        run: corepack enable && corepack prepare pnpm@latest --activate
+        working-directory: frontend
+        run: corepack enable && pnpm --version
 
       - name: Install dependencies
         working-directory: frontend
