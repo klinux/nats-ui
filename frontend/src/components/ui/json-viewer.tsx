@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
-import { Button } from './button';
 import { cn } from '../../lib/utils';
 
 interface JsonViewerProps {
@@ -53,20 +52,26 @@ function JsonNode({ keyName, value, depth = 0, defaultExpanded = false, isLast =
     ? `[${itemCount} item${itemCount !== 1 ? 's' : ''}]`
     : `{${itemCount} key${itemCount !== 1 ? 's' : ''}}`;
   
+  const label = keyName !== undefined ? `"${keyName}"` : 'root';
+
   return (
     <div>
-      <div 
-        className="flex items-start cursor-pointer hover:bg-muted/50 rounded"
+      <button
+        type="button"
+        className="flex w-full items-start rounded text-left hover:bg-muted/50"
         style={{ paddingLeft: `${indent}px` }}
-        onClick={() => setIsExpanded(!isExpanded)}
+        aria-expanded={isExpanded}
+        aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${label}`}
+        // Stop propagation so the tree never triggers click handlers on an
+        // ancestor (e.g. a row that would collapse the whole message).
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsExpanded(!isExpanded);
+        }}
       >
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-5 w-5 p-0 mr-1"
-        >
+        <span className="mr-1 inline-flex h-5 w-5 shrink-0 items-center justify-center">
           {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-        </Button>
+        </span>
         {keyName && (
           <span className="text-blue-600 dark:text-blue-400 mr-2">"{keyName}":</span>
         )}
@@ -76,8 +81,8 @@ function JsonNode({ keyName, value, depth = 0, defaultExpanded = false, isLast =
         {isExpanded && (
           <span className="text-muted-foreground">{isArray ? '[' : '{'}</span>
         )}
-      </div>
-      
+      </button>
+
       {isExpanded && (
         <div>
           {isArray ? (
