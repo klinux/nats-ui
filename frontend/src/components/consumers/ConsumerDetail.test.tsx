@@ -85,6 +85,38 @@ describe('ConsumerDetail pulled messages', () => {
     expect(screen.getByText('"prod"')).toBeInTheDocument();
   });
 
+  it('keeps a multi-message batch collapsed so large payloads stay cheap', async () => {
+    const user = userEvent.setup();
+    mockedFetchNext.mockResolvedValue([
+      {
+        sequence: 3,
+        subject: 'orders.created',
+        data: { id: 'ord-1', tags: { env: 'prod' } },
+        headers: {},
+        timestamp: '2026-05-03T18:21:19Z',
+      },
+      {
+        sequence: 4,
+        subject: 'orders.created',
+        data: { id: 'ord-2', tags: { env: 'prod' } },
+        headers: {},
+        timestamp: '2026-05-03T18:21:20Z',
+      },
+    ]);
+    renderDetail();
+
+    await user.click(screen.getByRole('button', { name: /fetch next/i }));
+
+    // Each message renders as a single collapsed root, not a full tree.
+    const roots = await screen.findAllByRole('button', { name: /expand root/i });
+    expect(roots).toHaveLength(2);
+    expect(screen.queryByText('"id":')).not.toBeInTheDocument();
+
+    await user.click(roots[0]);
+    expect(screen.getByText('"ord-1"')).toBeInTheDocument();
+    expect(screen.queryByText('"ord-2"')).not.toBeInTheDocument();
+  });
+
   it('falls back to plain text for non-JSON payloads', async () => {
     const user = userEvent.setup();
     mockedFetchNext.mockResolvedValue([

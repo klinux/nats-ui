@@ -58,8 +58,14 @@ export function PullMessagesSection({
                     {new Date(msg.timestamp).toLocaleTimeString()}
                   </span>
                 </div>
-                {/* JsonViewer keeps nested objects/arrays individually expandable. */}
-                <JsonViewer data={msg.data} defaultExpanded className="text-xs p-1" />
+                {/* JsonViewer keeps nested objects/arrays individually expandable.
+                    A single pulled message is shown open; larger batches stay
+                    collapsed so a batch of 100 doesn't render 100 full trees. */}
+                <JsonViewer
+                  data={msg.data}
+                  defaultExpanded={messages.length === 1}
+                  className="text-xs p-1"
+                />
               </div>
             ))}
           </div>
