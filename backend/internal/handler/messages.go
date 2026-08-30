@@ -2,8 +2,8 @@ package handler
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"time"
 
@@ -13,12 +13,20 @@ import (
 	natsclient "nats-ui-backend/internal/nats"
 )
 
+// activeSubjectsTTL is how long the active-subject list is reused. The UI polls
+// it, and each miss walks every connection's subscription list on the server.
+const activeSubjectsTTL = 3 * time.Second
+
 type MessagesHandler struct {
-	nc *natsclient.Client
+	nc             *natsclient.Client
+	activeSubjects *ttlCache[[]string]
 }
 
 func NewMessagesHandler(nc *natsclient.Client) *MessagesHandler {
-	return &MessagesHandler{nc: nc}
+	return &MessagesHandler{
+		nc:             nc,
+		activeSubjects: newTTLCache[[]string](activeSubjectsTTL),
+	}
 }
 
 type publishRequest struct {
@@ -55,16 +63,13 @@ func (h *MessagesHandler) Subscribe(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	defer sub.Unsubscribe()
+	defer func() {
+		if err := sub.Unsubscribe(); err != nil {
+			log.Printf("messages: unsubscribe from %q: %v", subject, err)
+		}
+	}()
 
-	c.Header("Content-Type", "text/event-stream")
-	c.Header("Cache-Control", "no-cache")
-	c.Header("Connection", "keep-alive")
-	c.Header("X-Accel-Buffering", "no")
-
-	flusher, _ := c.Writer.(http.Flusher)
-
-	c.Stream(func(w io.Writer) bool {
+	streamEvents(c, func(out io.Writer, w *sseWriter, keepalive <-chan time.Time) bool {
 		select {
 		case msg := <-ch:
 			var data any
@@ -79,36 +84,20 @@ func (h *MessagesHandler) Subscribe(c *gin.Context) {
 				}
 			}
 
-			evt := map[string]any{
+			w.sendJSON(out, map[string]any{
 				"subject":   msg.Subject,
 				"data":      data,
 				"headers":   headers,
 				"timestamp": time.Now().UnixMilli(),
 				"reply":     msg.Reply,
-			}
-
-			jsonData, err := json.Marshal(evt)
-			if err != nil {
-				fmt.Fprintf(w, "data: {\"error\":\"marshal failed\"}\n\n")
-				if flusher != nil {
-					flusher.Flush()
-				}
-				return true
-			}
-			fmt.Fprintf(w, "data: %s\n\n", jsonData)
-			if flusher != nil {
-				flusher.Flush()
-			}
+			})
 			return true
 
 		case <-c.Request.Context().Done():
 			return false
 
-		case <-time.After(30 * time.Second):
-			fmt.Fprintf(w, ": keepalive\n\n")
-			if flusher != nil {
-				flusher.Flush()
-			}
+		case <-keepalive:
+			w.keepAlive(out)
 			return true
 		}
 	})
@@ -171,10 +160,19 @@ func (h *MessagesHandler) RequestReply(c *gin.Context) {
 }
 
 func (h *MessagesHandler) ActiveSubjects(c *gin.Context) {
-	data, err := h.nc.FetchMonitoring("/connz?subs=1")
+	subjects, err := h.activeSubjects.get(h.loadActiveSubjects)
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
+	}
+	c.JSON(http.StatusOK, subjects)
+}
+
+// loadActiveSubjects collects the distinct subjects every client is subscribed to.
+func (h *MessagesHandler) loadActiveSubjects() ([]string, error) {
+	data, err := h.nc.FetchMonitoring("/connz?subs=1")
+	if err != nil {
+		return nil, err
 	}
 
 	var connz struct {
@@ -183,12 +181,11 @@ func (h *MessagesHandler) ActiveSubjects(c *gin.Context) {
 		} `json:"connections"`
 	}
 	if err := json.Unmarshal(data, &connz); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
+		return nil, err
 	}
 
 	seen := make(map[string]bool)
-	var subjects []string
+	subjects := []string{}
 	for _, conn := range connz.Connections {
 		for _, sub := range conn.SubsList {
 			if !seen[sub] {
@@ -197,8 +194,5 @@ func (h *MessagesHandler) ActiveSubjects(c *gin.Context) {
 			}
 		}
 	}
-	if subjects == nil {
-		subjects = []string{}
-	}
-	c.JSON(http.StatusOK, subjects)
+	return subjects, nil
 }

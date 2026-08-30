@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -8,16 +8,24 @@ interface JsonViewerProps {
   className?: string;
 }
 
+/**
+ * How many children a node renders before offering "show more". A payload with
+ * thousands of keys would otherwise mount thousands of DOM nodes at once.
+ */
+const CHUNK_SIZE = 100;
+
 interface JsonNodeProps {
   keyName?: string;
   value: unknown;
   depth?: number;
+  /** Only honoured at the root; nested nodes always start collapsed. */
   defaultExpanded?: boolean;
   isLast?: boolean;
 }
 
-function JsonNode({ keyName, value, depth = 0, defaultExpanded = false, isLast = false }: JsonNodeProps) {
-  const [isExpanded, setIsExpanded] = useState(depth === 0 ? defaultExpanded : false);
+const JsonNode = memo(function JsonNode({ keyName, value, depth = 0, defaultExpanded = false, isLast = false }: JsonNodeProps) {
+  const [isExpanded, setIsExpanded] = useState(depth === 0 && defaultExpanded);
+  const [visibleCount, setVisibleCount] = useState(CHUNK_SIZE);
   
   const isObject = value !== null && typeof value === 'object' && !Array.isArray(value);
   const isArray = Array.isArray(value);
@@ -46,8 +54,12 @@ function JsonNode({ keyName, value, depth = 0, defaultExpanded = false, isLast =
     );
   }
   
-  // const items = isArray ? value : Object.entries(value);
-  const itemCount = isArray ? value.length : Object.keys(value).length;
+  const entries: [string, unknown][] = isArray
+    ? (value as unknown[]).map((item, index) => [String(index), item])
+    : Object.entries(value as Record<string, unknown>);
+  const itemCount = entries.length;
+  const visible = entries.slice(0, visibleCount);
+  const hidden = itemCount - visible.length;
   const preview = isArray 
     ? `[${itemCount} item${itemCount !== 1 ? 's' : ''}]`
     : `{${itemCount} key${itemCount !== 1 ? 's' : ''}}`;
@@ -85,28 +97,27 @@ function JsonNode({ keyName, value, depth = 0, defaultExpanded = false, isLast =
 
       {isExpanded && (
         <div>
-          {isArray ? (
-            value.map((item, index) => (
-              <JsonNode
-                key={index}
-                keyName={String(index)}
-                value={item}
-                depth={depth + 1}
-                defaultExpanded={defaultExpanded}
-                isLast={index === value.length - 1}
-              />
-            ))
-          ) : (
-            Object.entries(value).map(([key, val], index, arr) => (
-              <JsonNode
-                key={key}
-                keyName={key}
-                value={val}
-                depth={depth + 1}
-                defaultExpanded={defaultExpanded}
-                isLast={index === arr.length - 1}
-              />
-            ))
+          {visible.map(([key, val], index) => (
+            <JsonNode
+              key={key}
+              keyName={key}
+              value={val}
+              depth={depth + 1}
+              isLast={index === itemCount - 1}
+            />
+          ))}
+          {hidden > 0 && (
+            <button
+              type="button"
+              className="rounded px-1 text-xs text-muted-foreground underline hover:bg-muted/50"
+              style={{ marginLeft: `${indent + 20}px` }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setVisibleCount((n) => n + CHUNK_SIZE);
+              }}
+            >
+              Show {Math.min(hidden, CHUNK_SIZE)} more
+            </button>
           )}
           <div className="flex items-start" style={{ paddingLeft: `${indent}px` }}>
             <div className="w-5 mr-1" />
@@ -117,7 +128,7 @@ function JsonNode({ keyName, value, depth = 0, defaultExpanded = false, isLast =
       )}
     </div>
   );
-}
+});
 
 export function JsonViewer({ data, defaultExpanded = false, className }: JsonViewerProps) {
   const parsedData = useMemo(() => {

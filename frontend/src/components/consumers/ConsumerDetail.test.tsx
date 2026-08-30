@@ -134,4 +134,65 @@ describe('ConsumerDetail pulled messages', () => {
 
     expect(await screen.findByText('plain payload')).toBeInTheDocument();
   });
+  it('browses without acking by default and acks only when asked', async () => {
+    const user = userEvent.setup();
+    renderDetail();
+
+    await user.click(screen.getByRole('button', { name: /fetch next/i }));
+    expect(mockedFetchNext).toHaveBeenLastCalledWith('ORDERS', 'orders-worker', 1, false);
+
+    await user.click(screen.getByRole('switch', { name: /ack after fetch/i }));
+    await user.click(screen.getByRole('button', { name: /fetch next/i }));
+
+    expect(mockedFetchNext).toHaveBeenLastCalledWith('ORDERS', 'orders-worker', 1, true);
+  });
+
+  it('warns before acking that messages will be consumed', async () => {
+    const user = userEvent.setup();
+    renderDetail();
+
+    expect(screen.queryByText(/permanently removed/i)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('switch', { name: /ack after fetch/i }));
+    expect(screen.getByText(/permanently removed/i)).toBeInTheDocument();
+  });
+
+  // Regression: messages were keyed by array index, so React reused the
+  // component from the previous batch and the single-message auto-expand
+  // silently stopped working after any larger pull.
+  it('auto-expands a single message pulled after a larger batch', async () => {
+    const user = userEvent.setup();
+    mockedFetchNext.mockResolvedValueOnce([
+      {
+        sequence: 3,
+        subject: 'orders.created',
+        data: { id: 'ord-1' },
+        headers: {},
+        timestamp: '2026-05-03T18:21:19Z',
+      },
+      {
+        sequence: 4,
+        subject: 'orders.created',
+        data: { id: 'ord-2' },
+        headers: {},
+        timestamp: '2026-05-03T18:21:20Z',
+      },
+    ]);
+    renderDetail();
+
+    await user.click(screen.getByRole('button', { name: /fetch next/i }));
+    expect(await screen.findAllByRole('button', { name: /expand root/i })).toHaveLength(2);
+
+    mockedFetchNext.mockResolvedValueOnce([
+      {
+        sequence: 5,
+        subject: 'orders.created',
+        data: { id: 'ord-3' },
+        headers: {},
+        timestamp: '2026-05-03T18:21:21Z',
+      },
+    ]);
+    await user.click(screen.getByRole('button', { name: /fetch next/i }));
+
+    expect(await screen.findByText('"ord-3"')).toBeInTheDocument();
+  });
 });

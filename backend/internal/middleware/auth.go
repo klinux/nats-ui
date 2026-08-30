@@ -28,6 +28,8 @@ func (a *AuthMiddleware) GenerateToken(username string) (string, error) {
 }
 
 func (a *AuthMiddleware) RequireAuth() gin.HandlerFunc {
+	parser := jwt.NewParser(jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
+
 	return func(c *gin.Context) {
 		auth := c.GetHeader("Authorization")
 		if auth == "" {
@@ -41,20 +43,16 @@ func (a *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 			return
 		}
 
-		token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (any, error) {
-			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, jwt.ErrSignatureInvalid
-			}
-			return a.secret, nil
-		})
-		if err != nil || !token.Valid {
+		claims, ok := a.parseClaims(parser, tokenStr)
+		if !ok {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired token"})
 			return
 		}
 
-		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid claims"})
+		// Stream tickets travel in URLs and are therefore easier to leak; they
+		// must never be replayable as a session token.
+		if isStreamTicket(claims) {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "stream ticket is not a session token"})
 			return
 		}
 

@@ -1,15 +1,12 @@
 package handler
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -35,7 +32,7 @@ type OAuth2Handler struct {
 	cfg       *config.Config
 	auth      *middleware.AuthMiddleware
 	providers map[string]*OAuth2Provider
-	states    sync.Map // CSRF state tokens
+	states    *stateStore
 }
 
 func NewOAuth2Handler(cfg *config.Config, auth *middleware.AuthMiddleware) *OAuth2Handler {
@@ -43,6 +40,7 @@ func NewOAuth2Handler(cfg *config.Config, auth *middleware.AuthMiddleware) *OAut
 		cfg:       cfg,
 		auth:      auth,
 		providers: make(map[string]*OAuth2Provider),
+		states:    newStateStore(oauth2StateTTL, oauth2StateCapacity),
 	}
 	h.loadProviders()
 	return h
@@ -159,8 +157,12 @@ func (h *OAuth2Handler) Authorize(c *gin.Context) {
 		return
 	}
 
-	state := generateState()
-	h.states.Store(state, true)
+	state, err := h.states.issue()
+	if err != nil {
+		log.Printf("oauth2: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to start authorization"})
+		return
+	}
 
 	redirectURI := h.cfg.BaseURL + "/api/auth/oauth2/" + provider + "/callback"
 
@@ -184,9 +186,8 @@ func (h *OAuth2Handler) Callback(c *gin.Context) {
 		return
 	}
 
-	state := c.Query("state")
-	if _, ok := h.states.LoadAndDelete(state); !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid state"})
+	if !h.states.consume(c.Query("state")) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or expired state"})
 		return
 	}
 
@@ -225,12 +226,8 @@ func (h *OAuth2Handler) Callback(c *gin.Context) {
 		return
 	}
 
-	// Redirect to frontend with token
-	c.Redirect(http.StatusTemporaryRedirect, "/?token="+url.QueryEscape(token))
-}
-
-func generateState() string {
-	b := make([]byte, 16)
-	rand.Read(b)
-	return hex.EncodeToString(b)
+	// Hand the token to the frontend in the URL fragment, not the query
+	// string: fragments are never sent to a server, so the JWT stays out of
+	// proxy access logs and Referer headers.
+	c.Redirect(http.StatusTemporaryRedirect, "/#token="+url.QueryEscape(token))
 }

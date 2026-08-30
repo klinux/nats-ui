@@ -1,10 +1,11 @@
-import { Download } from 'lucide-react';
+import { AlertTriangle, Download } from 'lucide-react';
 
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
+import { Switch } from '../ui/switch';
 import { JsonViewer } from '../ui/json-viewer';
 import type { PulledMessage } from '../../services/api-client-extended';
 
@@ -14,10 +15,12 @@ interface PullMessagesSectionProps {
   onPull: () => void;
   pulling: boolean;
   messages: PulledMessage[];
+  ack: boolean;
+  onAckChange: (v: boolean) => void;
 }
 
 export function PullMessagesSection({
-  batchSize, onBatchSizeChange, onPull, pulling, messages,
+  batchSize, onBatchSizeChange, onPull, pulling, messages, ack, onAckChange,
 }: PullMessagesSectionProps) {
   return (
     <Card>
@@ -45,10 +48,25 @@ export function PullMessagesSection({
             {pulling ? 'Fetching...' : 'Fetch Next'}
           </Button>
         </div>
+
+        {/* Browsing is non-destructive unless the user opts in: acking here
+            consumes the messages for the real consumer too. */}
+        <div className="flex items-center gap-2">
+          <Switch id="ack-after-fetch" checked={ack} onCheckedChange={onAckChange} />
+          <Label htmlFor="ack-after-fetch" className="text-xs font-normal">
+            Ack after fetch
+          </Label>
+        </div>
+        {ack && (
+          <p className="flex items-start gap-1.5 text-xs text-yellow-600 dark:text-yellow-500">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            Fetched messages will be acknowledged and permanently removed from this consumer.
+          </p>
+        )}
         {messages.length > 0 && (
           <div className="max-h-96 overflow-y-auto space-y-2">
-            {messages.map((msg, i) => (
-              <div key={i} className="p-2 rounded border text-xs space-y-1">
+            {messages.map((msg) => (
+              <div key={msg.sequence} className="p-2 rounded border text-xs space-y-1">
                 <div className="flex items-center justify-between gap-2 min-w-0">
                   <Badge variant="outline" className="text-[10px] shrink-0">seq: {msg.sequence}</Badge>
                   <span className="font-mono text-muted-foreground truncate" title={msg.subject}>

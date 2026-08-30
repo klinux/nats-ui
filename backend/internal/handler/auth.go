@@ -62,3 +62,35 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	user, _ := c.Get("user")
 	c.JSON(http.StatusOK, gin.H{"username": user})
 }
+
+// StreamTicket issues a short-lived, SSE-scoped ticket for the caller.
+//
+// EventSource cannot send an Authorization header, so the SSE endpoints
+// authenticate with this ticket in the query string instead of the 24h session
+// token — a URL-borne credential ends up in proxy logs, so it must expire fast
+// and be useless anywhere else.
+func (h *AuthHandler) StreamTicket(c *gin.Context) {
+	user, ok := c.Get("user")
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
+		return
+	}
+
+	username, ok := user.(string)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user claim"})
+		return
+	}
+
+	ticket, err := h.auth.GenerateStreamTicket(username)
+	if err != nil {
+		log.Printf("auth: failed to generate stream ticket for %q: %v", username, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate stream ticket"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"ticket":     ticket,
+		"expires_in": int(middleware.StreamTicketTTL.Seconds()),
+	})
+}

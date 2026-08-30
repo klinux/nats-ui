@@ -1,3 +1,5 @@
+import { openEventStream } from './event-stream';
+
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
 function getToken(): string | null {
@@ -14,6 +16,14 @@ export function clearToken() {
 
 export function hasToken(): boolean {
   return !!getToken();
+}
+
+/** Thrown when the backend rejects the session; the token has been cleared. */
+export class UnauthorizedError extends Error {
+  constructor(message = 'Unauthorized') {
+    super(message);
+    this.name = 'UnauthorizedError';
+  }
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -34,7 +44,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (response.status === 401) {
     clearToken();
     window.location.href = '/login';
-    throw new Error('Unauthorized');
+    throw new UnauthorizedError();
   }
 
   if (!response.ok) {
@@ -158,6 +168,16 @@ export interface ConsumerInfo {
   created: string;
 }
 
+/**
+ * Lists every consumer across all streams in a single request.
+ *
+ * Walking streams client-side meant N+1 sequential calls on every poll, which
+ * on its own tripped the server's per-IP rate limit.
+ */
+export async function listAllConsumers(): Promise<ConsumerInfo[]> {
+  return request('/consumers');
+}
+
 export async function listConsumers(streamName: string): Promise<ConsumerInfo[]> {
   return request(`/streams/${streamName}/consumers`);
 }
@@ -249,56 +269,21 @@ export async function fetchRoutes(): Promise<Record<string, unknown>> {
   return request('/server/routes');
 }
 
-// SSE Subscribe with automatic reconnection and exponential backoff
+/** Mints a short-lived ticket for the SSE endpoints (see event-stream.ts). */
+export async function fetchStreamTicket(): Promise<string> {
+  const res = await request<{ ticket: string; expires_in: number }>('/auth/stream-ticket', {
+    method: 'POST',
+  });
+  return res.ticket;
+}
+
+/** Subscribes to a subject over SSE, reconnecting automatically. */
 export function subscribeSSE(
   subject: string,
   onMessage: (msg: { subject: string; data: unknown; headers?: Record<string, string>; timestamp: number; reply?: string }) => void,
-  onError?: (err: Event) => void
+  onError?: (err: unknown) => void
 ): () => void {
-  let es: EventSource | null = null;
-  let closed = false;
-  let retryDelay = 1000;
-  const maxRetryDelay = 30000;
-  let retryTimeout: ReturnType<typeof setTimeout> | null = null;
-
-  function connect() {
-    if (closed) return;
-    const token = getToken();
-    const url = `${API_BASE}/api/messages/subscribe?subject=${encodeURIComponent(subject)}&token=${encodeURIComponent(token || '')}`;
-    es = new EventSource(url);
-
-    es.onopen = () => {
-      retryDelay = 1000; // reset backoff on successful connection
-    };
-
-    es.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        onMessage(msg);
-      } catch (e) {
-        console.error('Failed to parse SSE message:', e);
-      }
-    };
-
-    es.onerror = (err) => {
-      onError?.(err);
-      es?.close();
-      if (!closed) {
-        retryTimeout = setTimeout(() => {
-          retryDelay = Math.min(retryDelay * 2, maxRetryDelay);
-          connect();
-        }, retryDelay);
-      }
-    };
-  }
-
-  connect();
-
-  return () => {
-    closed = true;
-    if (retryTimeout) clearTimeout(retryTimeout);
-    es?.close();
-  };
+  return openEventStream('/messages/subscribe', { subject }, { onMessage, onError });
 }
 
 // Object Store

@@ -197,3 +197,103 @@ describe('message-store', () => {
     });
   });
 });
+
+describe('message-store subscription bookkeeping', () => {
+  beforeEach(() => {
+    useMessageStore.setState({ messages: [], subscriptions: [] });
+  });
+
+  // The array only ever grew: unsubscribe flipped isActive and left the entry
+  // behind, so repeated subscribe/unsubscribe cycles leaked entries forever.
+  it('removes a subscription instead of keeping a dead entry', () => {
+    useMessageStore.setState({
+      subscriptions: [
+        { id: 'sub_1', subject: 'a', messageCount: 0, isActive: true },
+        { id: 'sub_2', subject: 'b', messageCount: 0, isActive: true },
+      ],
+    });
+
+    useMessageStore.getState().unsubscribe('sub_1');
+
+    const subs = useMessageStore.getState().subscriptions;
+    expect(subs).toHaveLength(1);
+    expect(subs[0].id).toBe('sub_2');
+    expect(useMessageStore.getState().isSubscribed('a')).toBe(false);
+  });
+
+  it('calls the unsubscribe callback when removing', () => {
+    const unsub = vi.fn();
+    useMessageStore.setState({
+      subscriptions: [{ id: 'sub_1', subject: 'a', messageCount: 0, isActive: true, unsubscribe: unsub }],
+    });
+
+    useMessageStore.getState().unsubscribe('sub_1');
+
+    expect(unsub).toHaveBeenCalledTimes(1);
+  });
+
+  it('still removes the entry when the callback throws', () => {
+    useMessageStore.setState({
+      subscriptions: [{
+        id: 'sub_1',
+        subject: 'a',
+        messageCount: 0,
+        isActive: true,
+        unsubscribe: () => { throw new Error('already closed'); },
+      }],
+    });
+
+    useMessageStore.getState().unsubscribe('sub_1');
+
+    expect(useMessageStore.getState().subscriptions).toHaveLength(0);
+  });
+
+  it('ignores an unknown subscription id', () => {
+    useMessageStore.setState({
+      subscriptions: [{ id: 'sub_1', subject: 'a', messageCount: 0, isActive: true }],
+    });
+
+    useMessageStore.getState().unsubscribe('nope');
+
+    expect(useMessageStore.getState().subscriptions).toHaveLength(1);
+  });
+});
+
+describe('message-store dedup index', () => {
+  beforeEach(() => {
+    useMessageStore.setState({ messages: [], subscriptions: [] });
+  });
+
+  // Messages replaced wholesale (tests, clearMessages, eviction) must not
+  // leave the id index believing in messages that are gone.
+  it('recovers when messages are replaced without the index', () => {
+    useMessageStore.setState({ messages: [makeMessage({ id: 'external' })] });
+
+    useMessageStore.getState().addMessage(makeMessage({ id: 'external' }));
+    expect(useMessageStore.getState().messages).toHaveLength(1);
+
+    useMessageStore.getState().addMessage(makeMessage({ id: 'fresh' }));
+    expect(useMessageStore.getState().messages).toHaveLength(2);
+  });
+
+  it('lets an id be reused once its message is evicted by the cap', () => {
+    useMessageStore.getState().addMessage(makeMessage({ id: 'first' }));
+    for (let i = 0; i < 1000; i++) {
+      useMessageStore.getState().addMessage(makeMessage({ id: `filler_${i}` }));
+    }
+
+    expect(useMessageStore.getState().messages).toHaveLength(1000);
+    expect(useMessageStore.getState().messages.some((m) => m.id === 'first')).toBe(false);
+
+    useMessageStore.getState().addMessage(makeMessage({ id: 'first' }));
+    expect(useMessageStore.getState().messages[0].id).toBe('first');
+  });
+
+  it('lets an id be reused after the messages are cleared', () => {
+    useMessageStore.getState().addMessage(makeMessage({ id: 'reused', subject: 'a' }));
+    useMessageStore.getState().clearMessages();
+
+    useMessageStore.getState().addMessage(makeMessage({ id: 'reused', subject: 'a' }));
+    expect(useMessageStore.getState().messages).toHaveLength(1);
+  });
+});

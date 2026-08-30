@@ -10,6 +10,18 @@ data:
   NATS_URL: {{ .Values.config.natsURL | quote }}
   NATS_USER: {{ .Values.config.natsUser | quote }}
   ADMIN_USER: {{ .Values.config.adminUser | quote }}
+  {{- with .Values.config.trustedProxies }}
+  TRUSTED_PROXIES: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.config.maxUploadSize }}
+  MAX_UPLOAD_SIZE: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.config.rateLimitRPS }}
+  RATE_LIMIT_RPS: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.config.corsOrigins }}
+  CORS_ORIGINS: {{ . | quote }}
+  {{- end }}
   ALLOWED_OAUTH2_USERS: {{ .Values.oauth2.allowedUsers | quote }}
   {{- if .Values.oauth2.keycloak.url }}
   KEYCLOAK_URL: {{ .Values.oauth2.keycloak.url | quote }}

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { ChevronDown, ChevronRight, Eye } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
@@ -23,6 +23,9 @@ interface MessageBrowserProps {
 type FilterMode = 'last' | 'sequence' | 'subject' | 'time';
 
 const LIMIT_OPTIONS = [25, 50, 100, 200] as const;
+
+/** Longest collapsed preview rendered; the row can only show one line anyway. */
+const PREVIEW_MAX_CHARS = 200;
 
 export function MessageBrowser({ streamName, onClose }: MessageBrowserProps) {
   const [messages, setMessages] = useState<StreamMessage[]>([]);
@@ -211,7 +214,15 @@ interface MessageDataCellProps {
  * collapsed the whole message, making nested content impossible to inspect.
  */
 function MessageDataCell({ message, expanded, onToggle }: MessageDataCellProps) {
-  const preview = typeof message.data === 'string' ? message.data : JSON.stringify(message.data);
+  // Serialising every payload on every render put the full text of up to 200
+  // messages through JSON.stringify and into the DOM, only to be clipped by
+  // CSS. Memoise it and cut it to what a single line can show.
+  const preview = useMemo(() => {
+    if (expanded) return '';
+    const text = typeof message.data === 'string' ? message.data : JSON.stringify(message.data);
+    if (text === undefined) return '';
+    return text.length > PREVIEW_MAX_CHARS ? `${text.slice(0, PREVIEW_MAX_CHARS)}…` : text;
+  }, [message.data, expanded]);
 
   return (
     <div className="flex items-start gap-1">
@@ -231,7 +242,10 @@ function MessageDataCell({ message, expanded, onToggle }: MessageDataCellProps) 
           <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
         )}
         {!expanded && (
-          <pre className="min-w-0 flex-1 truncate rounded bg-muted p-1 font-mono text-xs">
+          <pre
+            data-testid={`message-preview-${message.sequence}`}
+            className="min-w-0 flex-1 truncate rounded bg-muted p-1 font-mono text-xs"
+          >
             {preview}
           </pre>
         )}

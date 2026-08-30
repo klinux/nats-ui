@@ -1,7 +1,6 @@
 import { toast } from 'sonner';
 import * as api from './api-client';
 import { subjectTracker } from './subject-tracker';
-import { useMessageStore } from '@/stores/message-store';
 
 // Compatibility layer: same interface as before, but uses backend API instead of nats.ws
 
@@ -26,18 +25,10 @@ class ApiNatsService implements NatsService {
     const payload = typeof data === 'string' ? data : JSON.stringify(data);
     subjectTracker.track(subject, payload);
 
-    // Optimistic: add message to store immediately if subscribed
-    const store = useMessageStore.getState();
-    if (store.isSubscribed(subject)) {
-      const msgId = `msg_${Date.now()}_${subject}_${payload.slice(0, 50)}`;
-      store.addMessage({
-        id: msgId,
-        subject,
-        data: payload,
-        headers: msgHeaders,
-        timestamp: new Date(),
-      });
-    }
+    // No optimistic insert: the backend holds the subscription, so a message
+    // published to a watched subject comes straight back over SSE. Adding it
+    // here duplicated it — the optimistic id was built from Date.now() and
+    // never matched the server timestamp the SSE copy carried.
   }
 
   async subscribe(subject: string, callback: (msg: { subject: string; data: unknown; headers?: Record<string, string>; timestamp: number; reply?: string }) => void): Promise<() => void> {
@@ -122,17 +113,8 @@ export async function fetchJetStreamStreams(): Promise<Record<string, unknown>[]
 
 export async function fetchAllConsumers(): Promise<Record<string, unknown>[]> {
   try {
-    const streams = await api.listStreams();
-    const consumers: Record<string, unknown>[] = [];
-    for (const stream of streams) {
-      const cfg = stream.config as Record<string, unknown>;
-      const name = cfg?.name as string;
-      if (name) {
-        const streamConsumers = await api.listConsumers(name);
-        consumers.push(...streamConsumers.map(c => ({ ...c, stream_name: name } as unknown as Record<string, unknown>)));
-      }
-    }
-    return consumers;
+    const consumers = await api.listAllConsumers();
+    return consumers as unknown as Record<string, unknown>[];
   } catch (error) {
     console.warn('Could not fetch consumers:', error);
     return [];
@@ -173,6 +155,11 @@ export class JetStreamManager {
 
   async listConsumers(streamName: string): Promise<Record<string, unknown>[]> {
     return await api.listConsumers(streamName) as unknown as Record<string, unknown>[];
+  }
+
+  /** Every consumer across all streams, in one request. */
+  async listAllConsumers(): Promise<Record<string, unknown>[]> {
+    return await api.listAllConsumers() as unknown as Record<string, unknown>[];
   }
 
   async getConsumerInfo(streamName: string, consumerName: string): Promise<Record<string, unknown> | null> {

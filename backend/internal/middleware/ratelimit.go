@@ -9,9 +9,9 @@ import (
 )
 
 type rateLimiter struct {
-	mu       sync.Mutex
-	tokens   float64
-	maxTokens float64
+	mu         sync.Mutex
+	tokens     float64
+	maxTokens  float64
 	refillRate float64 // tokens per second
 	lastRefill time.Time
 }
@@ -51,7 +51,9 @@ func RateLimit(rps float64) gin.HandlerFunc {
 
 	// Cleanup old entries every minute
 	go func() {
-		for range time.Tick(time.Minute) {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
 			mu.Lock()
 			for ip, rl := range limiters {
 				rl.mu.Lock()

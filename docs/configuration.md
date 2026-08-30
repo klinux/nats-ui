@@ -15,6 +15,7 @@ NATS UI is configured entirely through environment variables. No config files ar
 - [Authentication](#authentication)
   - [Username/Password](#usernamepassword)
   - [JWT](#jwt)
+  - [Server-Sent Events](#server-sent-events)
 - [OAuth2 / OIDC Providers](#oauth2--oidc-providers)
   - [Google](#google)
   - [GitHub](#github)
@@ -25,6 +26,7 @@ NATS UI is configured entirely through environment variables. No config files ar
   - [Docker Compose](#docker-compose)
   - [Docker Standalone](#docker-standalone)
   - [Helm / Kubernetes](#helm--kubernetes)
+- [Hardening](#hardening)
 - [API Reference](#api-reference)
 - [Environment Variables Reference](#environment-variables-reference)
 
@@ -181,6 +183,60 @@ Use a strong random string in production:
 
 ```bash
 JWT_SECRET=$(openssl rand -hex 32)
+```
+
+In production the backend **refuses to start** with the default `JWT_SECRET` or
+`ADMIN_PASS` — anyone knowing them could mint a valid session. See
+[Hardening](#hardening) for the override used by local development.
+
+### Server-Sent Events
+
+The live views (message subscribe, system events, KV watch) use SSE. The
+browser's `EventSource` cannot send an `Authorization` header, so these
+endpoints authenticate with a **stream ticket** instead: a JWT scoped with
+`aud: "sse"` and a two-minute expiry, obtained from
+`POST /api/auth/stream-ticket` with the normal session token, then passed as
+`?ticket=`.
+
+A ticket is deliberately not interchangeable with a session token — the session
+token is rejected on SSE routes and the ticket is rejected everywhere else — so
+the long-lived credential never appears in a URL, where proxies would log it.
+The frontend mints a fresh ticket for every connection attempt, so the short
+expiry never interferes with reconnects.
+
+---
+
+## Hardening
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TRUSTED_PROXIES` | _(empty)_ | Comma-separated proxy IPs/CIDRs allowed to set `X-Forwarded-For`. Empty means trust none. |
+| `MAX_UPLOAD_SIZE` | `104857600` | Object store upload ceiling in bytes (100 MiB). Larger uploads get `413`. |
+| `RATE_LIMIT_RPS` | `20` | Per-IP request rate (burst is 2×). |
+| `CORS_ORIGINS` | `*` | Comma-separated allowed origins. Credentials are only allowed when this is not `*`. |
+| `ALLOW_INSECURE_DEFAULTS` | `false` | Permit the default `JWT_SECRET`/`ADMIN_PASS` in production. Development only. |
+
+### Trusted proxies
+
+Client IPs are what the rate limiter counts, so they must not be forgeable. By
+default no proxy is trusted and the IP comes from the connection itself. Behind
+an ingress or load balancer, list its addresses — otherwise every request is
+attributed to the proxy and one noisy client can rate-limit everybody:
+
+```bash
+TRUSTED_PROXIES=10.0.0.0/8,192.168.0.0/16
+```
+
+### Insecure defaults
+
+`docker-compose.yml` sets `ALLOW_INSECURE_DEFAULTS=true` because it ships
+development credentials. The Helm chart instead generates a strong
+`JWT_SECRET` and `ADMIN_PASS` on first install when none are supplied, reusing
+whatever the existing Secret holds so an upgrade does not invalidate active
+sessions:
+
+```bash
+kubectl get secret nats-ui -o jsonpath='{.data.ADMIN_PASS}' | base64 -d
 ```
 
 ---
@@ -448,6 +504,7 @@ All endpoints are under `/api`. Protected routes require `Authorization: Bearer 
 |--------|------|------|-------------|
 | POST | `/api/auth/login` | No | Login with username/password, returns JWT |
 | GET | `/api/auth/me` | Yes | Get current user info |
+| POST | `/api/auth/stream-ticket` | Yes | Mint a short-lived SSE ticket (see [Server-Sent Events](#server-sent-events)) |
 | GET | `/api/auth/oauth2/providers` | No | List enabled OAuth2 providers |
 | GET | `/api/auth/oauth2/:provider/authorize` | No | Redirect to OAuth2 provider |
 | GET | `/api/auth/oauth2/:provider/callback` | No | OAuth2 callback, returns JWT via redirect |
@@ -462,6 +519,7 @@ All endpoints are under `/api`. Protected routes require `Authorization: Bearer 
 | GET | `/api/server/jetstream` | JetStream status and stats |
 | GET | `/api/server/subscriptions` | All active subscriptions |
 | GET | `/api/server/routes` | Cluster routes |
+| GET | `/api/server/events` | System events over SSE (ticket auth) |
 
 ### Streams
 
@@ -479,10 +537,14 @@ All endpoints are under `/api`. Protected routes require `Authorization: Bearer 
 
 | Method | Path | Description |
 |--------|------|-------------|
+| GET | `/api/consumers` | List every consumer across all streams (one request) |
 | GET | `/api/streams/:name/consumers` | List consumers for a stream |
 | POST | `/api/streams/:name/consumers` | Create a consumer |
 | GET | `/api/streams/:name/consumers/:consumer` | Get consumer details |
 | DELETE | `/api/streams/:name/consumers/:consumer` | Delete a consumer |
+| POST | `/api/streams/:name/consumers/:consumer/pause` | Pause a consumer |
+| POST | `/api/streams/:name/consumers/:consumer/resume` | Resume a consumer |
+| POST | `/api/streams/:name/consumers/:consumer/next` | Browse the next messages. Non-destructive by default (messages are nak'd and stay available); pass `ack=true` to consume them. Query: `batch` (1–100). |
 
 ### Key-Value Store
 
@@ -495,13 +557,14 @@ All endpoints are under `/api`. Protected routes require `Authorization: Bearer 
 | GET | `/api/kv/:bucket/keys/:key` | Get key value |
 | PUT | `/api/kv/:bucket/keys/:key` | Set key value |
 | DELETE | `/api/kv/:bucket/keys/:key` | Delete a key |
+| GET | `/api/kv/:bucket/watch` | Watch key changes over SSE (ticket auth; query: `key`) |
 
 ### Messages
 
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/api/messages/publish` | Publish a message (body: `{subject, data, headers?}`) |
-| GET | `/api/messages/subscribe` | Subscribe via SSE (query: `subject`) |
+| GET | `/api/messages/subscribe` | Subscribe via SSE (ticket auth; query: `subject`) |
 | POST | `/api/messages/request` | Request-reply (body: `{subject, data, headers?, timeout?}`) |
 | GET | `/api/messages/subjects` | List active subjects |
 
@@ -519,6 +582,11 @@ All endpoints are under `/api`. Protected routes require `Authorization: Bearer 
 | `ADMIN_USER` | `admin` | No | UI login username |
 | `ADMIN_PASS` | `admin` | Yes | UI login password |
 | `JWT_SECRET` | `change-me-in-production` | Yes | JWT signing key |
+| `TRUSTED_PROXIES` | _(empty)_ | No | Proxies allowed to set `X-Forwarded-For` |
+| `MAX_UPLOAD_SIZE` | `104857600` | No | Object store upload limit in bytes |
+| `RATE_LIMIT_RPS` | `20` | No | Per-IP request rate |
+| `CORS_ORIGINS` | `*` | No | Allowed CORS origins |
+| `ALLOW_INSECURE_DEFAULTS` | `false` | No | Allow default secrets in production |
 | `ALLOWED_OAUTH2_USERS` | `*` | No | Allowed OAuth2 emails |
 | `GOOGLE_CLIENT_ID` | _(empty)_ | No | Google OAuth2 |
 | `GOOGLE_CLIENT_SECRET` | _(empty)_ | No | Google OAuth2 |
@@ -533,3 +601,10 @@ All endpoints are under `/api`. Protected routes require `Authorization: Bearer 
 | `OIDC_CLIENT_ID` | _(empty)_ | No | OIDC client |
 | `OIDC_CLIENT_SECRET` | _(empty)_ | No | OIDC secret |
 | `OIDC_SCOPES` | `openid email profile` | No | OIDC scopes |
+
+### Frontend build variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VITE_API_URL` | _(empty)_ | Backend origin. Empty means same-origin. |
+| `VITE_MESSAGE_TTL_MS` | `300000` | How long received messages are kept in the browser. `0` keeps them until the 1000-message cap evicts them. |

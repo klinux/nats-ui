@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { toast } from 'sonner';
 import type { NatsService } from '@/services/nats-service';
+import { filterMessages } from '@/lib/message-filter';
+import { idIndex, retargetIndex } from './message-index';
 
 export interface Message {
   id: string;
@@ -21,7 +23,24 @@ export interface Subscription {
 }
 
 const MAX_MESSAGES = 1000;
-const TTL_MS = 5 * 60 * 1000;
+
+/**
+ * How long a message is kept. Configurable because messages silently vanishing
+ * mid-investigation is surprising; set VITE_MESSAGE_TTL_MS to 0 to keep them
+ * until the cap evicts them.
+ */
+const TTL_MS = (() => {
+  const raw = import.meta.env.VITE_MESSAGE_TTL_MS;
+  if (raw === undefined || raw === '') return 5 * 60 * 1000;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 5 * 60 * 1000;
+})();
+
+/** Unique message id; two identical payloads in the same millisecond are still
+ * distinct messages, which a content-derived id could not express. */
+function nextMessageId(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `msg_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+}
 
 interface MessageState {
   messages: Message[];
@@ -47,14 +66,23 @@ export const useMessageStore = create<MessageState & MessageActions>((set, get) 
 
   addMessage: (msg) => {
     set((state) => {
-      // Deduplicate by id
-      if (state.messages.some((m) => m.id === msg.id)) return state;
-      return { messages: [msg, ...state.messages].slice(0, MAX_MESSAGES) };
+      const ids = idIndex(state.messages);
+      if (ids.has(msg.id)) return state;
+
+      const messages = [msg, ...state.messages];
+      ids.add(msg.id);
+      if (messages.length > MAX_MESSAGES) {
+        const dropped = messages.pop();
+        if (dropped) ids.delete(dropped.id);
+      }
+      retargetIndex(messages);
+
+      return { messages };
     });
   },
 
   subscribe: async (connection, subject, queueGroup) => {
-    const subId = `sub_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const subId = `sub_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
 
     const newSub: Subscription = {
       id: subId,
@@ -69,32 +97,20 @@ export const useMessageStore = create<MessageState & MessageActions>((set, get) 
     try {
       const unsub = await connection.subscribe(subject, (msg) => {
         const msgData = typeof msg.data === 'string' ? msg.data : JSON.stringify(msg.data);
-        const msgId = `msg_${msg.timestamp}_${msg.subject}_${msgData.slice(0, 50)}`;
-        const message: Message = {
-          id: msgId,
+        get().addMessage({
+          id: nextMessageId(),
           subject: msg.subject,
           data: msgData,
           headers: msg.headers,
           timestamp: new Date(msg.timestamp),
           replyTo: msg.reply,
-        };
-
-        set((state) => {
-          // Deduplicate: skip if message with same id already exists (optimistic add)
-          if (state.messages.some((m) => m.id === msgId)) {
-            return {
-              subscriptions: state.subscriptions.map((s) =>
-                s.id === subId ? { ...s, messageCount: s.messageCount + 1 } : s,
-              ),
-            };
-          }
-          return {
-            messages: [message, ...state.messages].slice(0, MAX_MESSAGES),
-            subscriptions: state.subscriptions.map((s) =>
-              s.id === subId ? { ...s, messageCount: s.messageCount + 1 } : s,
-            ),
-          };
         });
+
+        set((state) => ({
+          subscriptions: state.subscriptions.map((s) =>
+            s.id === subId ? { ...s, messageCount: s.messageCount + 1 } : s,
+          ),
+        }));
       });
 
       set((state) => ({
@@ -105,20 +121,25 @@ export const useMessageStore = create<MessageState & MessageActions>((set, get) 
 
       toast.success(`Subscribed to ${subject}`);
     } catch {
+      // Drop the pending entry, or the UI shows a subscription that never was.
+      set((state) => ({ subscriptions: state.subscriptions.filter((s) => s.id !== subId) }));
       toast.error('Failed to subscribe');
     }
   },
 
   unsubscribe: (subId) => {
-    set((state) => ({
-      subscriptions: state.subscriptions.map((s) => {
-        if (s.id === subId) {
-          try { s.unsubscribe?.(); } catch { /* ignore */ }
-          return { ...s, isActive: false };
-        }
-        return s;
-      }),
-    }));
+    const sub = get().subscriptions.find((s) => s.id === subId);
+    if (!sub) return;
+
+    try {
+      sub.unsubscribe?.();
+    } catch (err) {
+      console.warn(`Failed to close subscription to ${sub.subject}:`, err);
+    }
+
+    // Remove rather than flag: flagged entries accumulated forever and every
+    // isSubscribed lookup had to walk past them.
+    set((state) => ({ subscriptions: state.subscriptions.filter((s) => s.id !== subId) }));
     toast.success('Unsubscribed');
   },
 
@@ -148,19 +169,7 @@ export const useMessageStore = create<MessageState & MessageActions>((set, get) 
     toast.success('Messages cleared');
   },
 
-  getFilteredMessages: (subject, search) => {
-    let filtered = get().messages.filter((m) => m.subject === subject);
-    if (search?.trim()) {
-      const q = search.toLowerCase();
-      filtered = filtered.filter(
-        (m) =>
-          m.data.toLowerCase().includes(q) ||
-          m.subject.toLowerCase().includes(q) ||
-          Object.values(m.headers || {}).some((v) => v.toLowerCase().includes(q)),
-      );
-    }
-    return filtered;
-  },
+  getFilteredMessages: (subject, search) => filterMessages(get().messages, subject, search),
 
   exportMessages: (subject) => {
     const filtered = get().messages.filter((m) => m.subject === subject);
@@ -184,6 +193,7 @@ export const useMessageStore = create<MessageState & MessageActions>((set, get) 
   },
 
   evictExpired: () => {
+    if (TTL_MS === 0) return;
     const cutoff = new Date(Date.now() - TTL_MS);
     set((state) => {
       const filtered = state.messages.filter((m) => m.timestamp > cutoff);

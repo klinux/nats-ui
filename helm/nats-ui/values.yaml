@@ -16,12 +16,24 @@ config:
   natsURL: "nats://nats:4222"
   natsUser: "admin"
   adminUser: "admin"
+  # Comma-separated proxy IPs/CIDRs allowed to set X-Forwarded-For. Empty means
+  # trust none — set this to your ingress range so per-IP rate limiting sees
+  # real client addresses instead of the ingress pod's.
+  trustedProxies: ""
+  # Max object-store upload size in bytes (default 104857600 = 100 MiB).
+  maxUploadSize: ""
+  rateLimitRPS: ""
+  corsOrigins: ""
 
 # Sensitive values — stored in a Secret
 secrets:
   natsPass: ""
-  adminPass: "admin"
-  jwtSecret: "change-me-in-production"
+  # Set a real password. Left empty, the chart generates one on first install
+  # and reuses it on upgrades; read it from the Secret to log in.
+  adminPass: ""
+  # Left empty, a random secret is generated on first install and preserved
+  # across upgrades so existing sessions stay valid.
+  jwtSecret: ""
 
 # OAuth2 configuration (optional)
 oauth2:

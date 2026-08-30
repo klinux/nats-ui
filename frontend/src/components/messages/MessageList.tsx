@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import {
   MessageSquare,
   Play,
@@ -15,6 +15,7 @@ import { Badge } from '../ui/badge';
 import { Input } from '../ui/input';
 import { MessageItem } from './MessageItem';
 import type { Message } from '../../stores/message-store';
+import { matchesSearch } from '../../lib/message-filter';
 
 interface MessageListProps {
   topic: string;
@@ -44,16 +45,12 @@ export function MessageList({
     });
   }, []);
 
-  const filtered = search.trim()
-    ? messages.filter(m => {
-        const q = search.toLowerCase();
-        return (
-          m.data.toLowerCase().includes(q) ||
-          m.subject.toLowerCase().includes(q) ||
-          Object.values(m.headers || {}).some(v => v.toLowerCase().includes(q))
-        );
-      })
-    : messages;
+  // Memoised and shared with the store's own filter, which had a duplicate of
+  // this predicate that could drift.
+  const filtered = useMemo(
+    () => (search.trim() ? messages.filter((m) => matchesSearch(m, search)) : messages),
+    [messages, search],
+  );
 
   return (
     <Card className="flex-1 flex flex-col min-h-0 overflow-hidden">
