@@ -12,16 +12,16 @@ const MAX_EVENTS = 500;
 function getEventColor(subject: string): string {
   const lower = subject.toLowerCase();
   if (lower.includes('disconnect') || lower.includes('error') || lower.includes('stall')) {
-    return 'text-red-600 dark:text-red-400';
+    return 'text-state-crit';
   }
   if (lower.includes('connect') || lower.includes('auth')) {
-    return 'text-green-600 dark:text-green-400';
+    return 'text-syntax-string';
   }
   if (lower.includes('leafnode') || lower.includes('gateway')) {
-    return 'text-blue-600 dark:text-blue-400';
+    return 'text-syntax-key';
   }
   if (lower.includes('jetstream') || lower.includes('stream')) {
-    return 'text-purple-600 dark:text-purple-400';
+    return 'text-syntax-boolean';
   }
   return 'text-foreground';
 }
@@ -163,8 +163,8 @@ function EventStats({ events, listening }: { events: SystemEvent[]; listening: b
   return (
     <div className="grid gap-4 md:grid-cols-4 flex-shrink-0">
       <StatCard label="Total Events" value={events.length} icon={Activity} />
-      <StatCard label="Connects" value={connectCount} icon={Play} className="text-green-600" />
-      <StatCard label="Disconnects" value={disconnectCount} icon={Square} className="text-red-600" />
+      <StatCard label="Connects" value={connectCount} icon={Play} className="text-state-ok" />
+      <StatCard label="Disconnects" value={disconnectCount} icon={Square} className="text-destructive" />
       <StatCard label="Status" value={listening ? 'Listening' : 'Stopped'} icon={Activity} />
     </div>
   );

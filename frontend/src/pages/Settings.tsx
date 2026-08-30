@@ -72,31 +72,31 @@ export function Settings() {
           <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
             <div className="flex items-center gap-3">
               {status === 'connected' ? (
-                <Wifi className="h-4 w-4 text-green-600" />
+                <Wifi className="h-4 w-4 text-state-ok" />
               ) : status === 'connecting' ? (
-                <div className="animate-spin h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full" />
+                <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
               ) : status === 'error' ? (
-                <AlertCircle className="h-4 w-4 text-red-600" />
+                <AlertCircle className="h-4 w-4 text-destructive" />
               ) : (
-                <WifiOff className="h-4 w-4 text-gray-400" />
+                <WifiOff className="h-4 w-4 text-muted-foreground" />
               )}
               <span className="text-sm font-medium">NATS Connection</span>
             </div>
             <Badge
               variant={status === 'connected' ? 'default' : status === 'error' ? 'destructive' : 'secondary'}
-              className={status === 'connected' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : ''}
+              className={status === 'connected' ? 'bg-state-ok-soft text-state-ok-on-soft' : ''}
             >
               {status.charAt(0).toUpperCase() + status.slice(1)}
             </Badge>
           </div>
 
           {error && (
-            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+            <div className="p-3 bg-state-crit-soft border border-state-crit/40 rounded-lg">
               <div className="flex items-center gap-2 mb-1">
-                <AlertCircle className="h-4 w-4 text-red-600" />
-                <span className="text-sm font-medium text-red-800 dark:text-red-200">Connection Error</span>
+                <AlertCircle className="h-4 w-4 text-destructive" />
+                <span className="text-sm font-medium text-state-crit-on-soft">Connection Error</span>
               </div>
-              <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+              <p className="text-sm text-state-crit-on-soft">{error}</p>
             </div>
           )}
 
@@ -149,7 +149,7 @@ export function Settings() {
                       <p className="text-xs text-muted-foreground">Client ID: {provider.clientId.substring(0, 20)}...</p>
                     </div>
                   </div>
-                  <Badge variant="default" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
+                  <Badge variant="default" className="bg-state-ok-soft text-state-ok-on-soft">
                     Enabled
                   </Badge>
                 </div>

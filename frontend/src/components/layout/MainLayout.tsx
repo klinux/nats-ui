@@ -60,13 +60,13 @@ const systemItems: NavItem[] = [
 const getStatusColor = (status: string) => {
   switch (status) {
     case 'connected':
-      return 'bg-green-500';
+      return 'bg-state-ok';
     case 'connecting':
-      return 'bg-yellow-500';
+      return 'bg-state-warn';
     case 'error':
-      return 'bg-red-500';
+      return 'bg-state-crit';
     default:
-      return 'bg-gray-500';
+      return 'bg-muted-foreground';
   }
 };
 
@@ -156,7 +156,7 @@ export function MainLayout() {
               }
               className={
                 status === 'connected'
-                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
+                  ? 'bg-state-ok-soft text-state-ok-on-soft'
                   : ''
               }
             >

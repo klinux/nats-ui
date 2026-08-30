@@ -174,7 +174,7 @@ export function RequestReplyPanel({ topic, isExpanded, onToggle }: RequestReplyP
                         {responseTime}ms
                       </Badge>
                     )}
-                    <Badge variant="default" className="text-[10px] bg-green-600">OK</Badge>
+                    <Badge variant="default" className="text-[10px] bg-state-ok">OK</Badge>
                   </div>
                 </div>
                 {isJsonResponse ? (

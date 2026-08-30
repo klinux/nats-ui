@@ -56,6 +56,17 @@ jobs:
         working-directory: frontend
         run: pnpm lint
 
+      # Palette classes bypass the theme tokens entirely, which is how the UI
+      # ended up with colour that no theme change could reach. Semantic state
+      # belongs in --state-* / --destructive, not in bg-red-600.
+      - name: No hardcoded palette colours
+        working-directory: frontend
+        run: |
+          if grep -rEn "(bg|text|border|fill|stroke)-(red|green|yellow|blue|orange|purple|emerald|amber|rose|cyan|indigo|violet|teal|lime|pink|sky)-[0-9]{2,3}" src --include='*.tsx'; then
+            echo "::error::Use semantic tokens (state-ok / state-warn / state-crit / destructive / primary) instead of Tailwind palette classes."
+            exit 1
+          fi
+
       - name: Test
         working-directory: frontend
         run: pnpm test

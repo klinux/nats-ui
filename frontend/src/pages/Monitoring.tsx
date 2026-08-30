@@ -109,8 +109,8 @@ export function Monitoring() {
           <h1 className="text-3xl font-bold">Monitoring</h1>
           <p className="text-muted-foreground">Real-time NATS server metrics and performance data</p>
         </div>
-        <Badge variant="default" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
-          <div className="mr-1 h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+        <Badge variant="default" className="bg-state-ok-soft text-state-ok-on-soft">
+          <div className="mr-1 h-2 w-2 rounded-full bg-state-ok animate-pulse" />
           Live Data
         </Badge>
       </div>

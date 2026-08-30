@@ -18,9 +18,9 @@ export function MetricCard({ title, value, description, icon, trend, status = 'n
   const getStatusColor = () => {
     switch (status) {
       case 'warning':
-        return 'border-yellow-200 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-950';
+        return 'border-state-warn/40 bg-state-warn-soft';
       case 'error':
-        return 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950';
+        return 'border-state-crit/40 bg-state-crit-soft';
       default:
         return '';
     }
@@ -41,12 +41,12 @@ export function MetricCard({ title, value, description, icon, trend, status = 'n
           <div className="flex items-center mt-1">
             <TrendingUp
               className={`mr-1 h-3 w-3 ${
-                trend.isPositive ? 'text-green-600' : 'text-red-600'
+                trend.isPositive ? 'text-state-ok' : 'text-destructive'
               }`}
             />
             <span
               className={`text-xs ${
-                trend.isPositive ? 'text-green-600' : 'text-red-600'
+                trend.isPositive ? 'text-state-ok' : 'text-destructive'
               }`}
             >
               {trend.isPositive ? '+' : ''}{trend.value}%

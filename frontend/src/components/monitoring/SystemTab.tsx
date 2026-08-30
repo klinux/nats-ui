@@ -121,14 +121,14 @@ export function SystemTab({ serverInfo, jetStreamInfo, timeSeriesData, colors, i
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">Server Status</span>
-              <Badge variant="default" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
+              <Badge variant="default" className="bg-state-ok-soft text-state-ok-on-soft">
                 {isConnected ? 'Healthy' : 'Disconnected'}
               </Badge>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">JetStream</span>
               <Badge variant={serverInfo?.jetstream !== undefined ? 'default' : 'secondary'}
-                     className={serverInfo?.jetstream !== undefined ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : ''}>
+                     className={serverInfo?.jetstream !== undefined ? 'bg-state-ok-soft text-state-ok-on-soft' : ''}>
                 {serverInfo?.jetstream !== undefined ? 'Enabled' : 'Disabled'}
               </Badge>
             </div>

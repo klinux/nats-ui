@@ -113,7 +113,7 @@ export function Login() {
                   {...form.register('username')}
                 />
                 {form.formState.errors.username && (
-                  <p className="text-sm text-red-600">{form.formState.errors.username.message}</p>
+                  <p className="text-sm text-destructive">{form.formState.errors.username.message}</p>
                 )}
               </div>
 
@@ -126,7 +126,7 @@ export function Login() {
                   {...form.register('password')}
                 />
                 {form.formState.errors.password && (
-                  <p className="text-sm text-red-600">{form.formState.errors.password.message}</p>
+                  <p className="text-sm text-destructive">{form.formState.errors.password.message}</p>
                 )}
               </div>
 

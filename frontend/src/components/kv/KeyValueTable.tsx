@@ -264,7 +264,7 @@ function EntryRow({
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-red-600 hover:text-red-700"
+                className="text-destructive hover:text-destructive/80"
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
@@ -280,7 +280,7 @@ function EntryRow({
                 <Button variant="outline">Cancel</Button>
                 <Button
                   onClick={() => onDelete(entry.key, entry.bucket)}
-                  className="bg-red-600 text-white hover:bg-red-700"
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 >
                   Delete
                 </Button>
