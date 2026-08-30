@@ -81,3 +81,38 @@ describe('JsonViewer', () => {
     expect(screen.getByText('"env":')).toBeInTheDocument();
   });
 });
+
+describe('JsonViewer with large payloads', () => {
+  it('renders only the first chunk of a huge object and reveals the rest on demand', async () => {
+    const user = userEvent.setup();
+    const huge = Object.fromEntries(
+      Array.from({ length: 250 }, (_, i) => [`key_${i}`, i]),
+    );
+
+    render(<JsonViewer data={huge} defaultExpanded />);
+
+    // A capped first page keeps thousands of DOM nodes off the screen.
+    expect(screen.getByText('"key_0":')).toBeInTheDocument();
+    expect(screen.queryByText('"key_150":')).not.toBeInTheDocument();
+
+    // The label states what one click reveals, not the whole remainder.
+    await user.click(screen.getByRole('button', { name: /show 100 more/i }));
+    expect(screen.getByText('"key_150":')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /show 50 more/i }));
+    expect(screen.getByText('"key_249":')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /show .* more/i })).not.toBeInTheDocument();
+  });
+
+  it('caps long arrays the same way', () => {
+    render(<JsonViewer data={Array.from({ length: 130 }, (_, i) => i)} defaultExpanded />);
+
+    expect(screen.getByRole('button', { name: /show 30 more/i })).toBeInTheDocument();
+  });
+
+  it('does not offer "show more" when everything fits', () => {
+    render(<JsonViewer data={{ a: 1, b: 2 }} defaultExpanded />);
+
+    expect(screen.queryByRole('button', { name: /show .* more/i })).not.toBeInTheDocument();
+  });
+});
