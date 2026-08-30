@@ -12,6 +12,20 @@ Based on [gastbob40/nats-ui](https://github.com/gastbob40/nats-ui), rebuilt with
 
 The backend proxies all NATS operations through a REST API, eliminating the need for direct WebSocket connections from the browser.
 
+## Screenshots
+
+**Dashboard** — throughput leads, with the counters that give it context underneath.
+
+![NATS UI dashboard showing throughput of 2.6k messages per second with a sparkline, plus connection, subscription and uptime readouts](docs/images/dashboard-dark.png)
+
+**Consumers** — lag is a shape, not a figure to compare across rows. Each consumer carries a stripe and a bar coloured by how far behind it is (healthy, over 1k pending, over 10k), the worst sits at the top, and every stream keeps a stable identity colour wherever it appears.
+
+![Consumer table sorted by lag: payments-settler critical at 13,151 pending in red, two orders consumers behind in amber, audit-archiver healthy in green](docs/images/consumers-dark.png)
+
+**Streams** — the same system in the light theme.
+
+![Stream list showing AUDIT, ORDERS, PAYMENTS and SESSIONS with per-stream identity colours, message counts, sizes and storage type](docs/images/streams-light.png)
+
 ## Features
 
 - **Dashboard** — Server info, JetStream stats, connections, resource usage

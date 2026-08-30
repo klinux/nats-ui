@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../components/ui/dialog';
 import { useNats } from '../hooks/useNats';
 import { toast } from 'sonner';
-import { lagBorderClass, lagLevel } from '../lib/lag';
+import { lagLevel, lagStripeClass } from '../lib/lag';
 import { streamColor } from '../lib/stream-color';
 import { LagCell } from '../components/consumers/LagCell';
 import { TableRowSkeleton } from '../components/ui/skeletons';
@@ -193,11 +193,12 @@ export function Consumers() {
                   {consumers.map((consumer) => {
                     const activity = getActivityStatus(consumer.lastActivity);
                     return (
-                      <TableRow
-                        key={consumer.name}
-                        className={consumer.paused ? 'border-l-2 border-l-muted-foreground/40' : `border-l-2 ${lagBorderClass(consumer.pending)}`}
-                      >
-                        <TableCell className="font-medium">{consumer.name}</TableCell>
+                      <TableRow key={consumer.name}>
+                        <TableCell
+                          className={`font-medium ${consumer.paused ? 'shadow-[inset_2px_0_0_var(--muted-foreground)]' : lagStripeClass(consumer.pending)}`}
+                        >
+                          {consumer.name}
+                        </TableCell>
                         <TableCell>
                           <Badge variant="outline" className="gap-1.5">
                             <span

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { lagLevel, lagLabel, lagDotClass, lagTextClass, lagBarPercent, LAG_WARN, LAG_CRIT } from './lag';
+import { lagLevel, lagLabel, lagDotClass, lagTextClass, lagBarPercent, lagStripeClass, LAG_WARN, LAG_CRIT } from './lag';
 
 describe('lagLevel', () => {
   it('classifies the thresholds at their exact boundaries', () => {
@@ -62,5 +62,18 @@ describe('lagBarPercent', () => {
       expect(pct).toBeGreaterThanOrEqual(0);
       expect(pct).toBeLessThanOrEqual(100);
     }
+  });
+});
+
+describe('class helpers are literal', () => {
+  // Tailwind only generates classes it can find as literal text in the source.
+  // Interpolated names compile to nothing, which is how the row stripe shipped
+  // invisible; this pins the shape the scanner needs to see.
+  it('returns the full class name for every level', () => {
+    expect(lagStripeClass(0)).toBe('shadow-[inset_2px_0_0_var(--state-ok)]');
+    expect(lagStripeClass(LAG_WARN)).toBe('shadow-[inset_2px_0_0_var(--state-warn)]');
+    expect(lagStripeClass(LAG_CRIT)).toBe('shadow-[inset_2px_0_0_var(--state-crit)]');
+    expect(lagTextClass(0)).toBe('text-state-ok');
+    expect(lagDotClass(LAG_CRIT)).toBe('bg-state-crit');
   });
 });
