@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from 'react';
 import { useNatsStore } from '@/stores/nats-store';
 import { useMessageStore } from '@/stores/message-store';
 import { hasToken } from '@/services/api-client';
+import { readOAuthToken } from '@/lib/oauth-token';
 
 interface NatsProviderProps {
   children: ReactNode;
@@ -26,8 +27,7 @@ export function NatsProvider({ children }: NatsProviderProps) {
 
   // Handle OAuth2 token from URL (mount-only)
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get('token');
+    const token = readOAuthToken(window.location);
     if (token) {
       handleOAuthToken(token);
     }

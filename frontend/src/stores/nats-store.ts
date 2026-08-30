@@ -75,6 +75,7 @@ export const useNatsStore = create<NatsState & NatsActions>((set, get) => ({
 
   handleOAuthToken: (token: string) => {
     setToken(token);
+    // Strip the credential from the address bar (fragment included).
     window.history.replaceState({}, '', window.location.pathname);
     get().connect();
   },

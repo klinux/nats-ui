@@ -58,6 +58,7 @@ export function ConsumerDetail({ consumer, onClose, onRefresh, getActivityStatus
   const [loading, setLoading] = useState(false);
   const [batchSize, setBatchSize] = useState(1);
   const [pulledMessages, setPulledMessages] = useState<PulledMessage[]>([]);
+  const [ackOnPull, setAckOnPull] = useState(false);
   const [pulling, setPulling] = useState(false);
 
   const handlePause = useCallback(async () => {
@@ -89,7 +90,7 @@ export function ConsumerDetail({ consumer, onClose, onRefresh, getActivityStatus
   const handlePull = useCallback(async () => {
     setPulling(true);
     try {
-      const msgs = await fetchNextMessages(consumer.stream, consumer.name, batchSize);
+      const msgs = await fetchNextMessages(consumer.stream, consumer.name, batchSize, ackOnPull);
       setPulledMessages(msgs);
       if (msgs.length === 0) {
         toast.info('No messages available');
@@ -99,7 +100,7 @@ export function ConsumerDetail({ consumer, onClose, onRefresh, getActivityStatus
     } finally {
       setPulling(false);
     }
-  }, [consumer.stream, consumer.name, batchSize]);
+  }, [consumer.stream, consumer.name, batchSize, ackOnPull]);
 
   const activity = getActivityStatus(consumer.lastActivity);
   const lagColor = getLagColor(consumer.pending);
@@ -138,6 +139,8 @@ export function ConsumerDetail({ consumer, onClose, onRefresh, getActivityStatus
             onPull={handlePull}
             pulling={pulling}
             messages={pulledMessages}
+            ack={ackOnPull}
+            onAckChange={setAckOnPull}
           />
         </div>
 

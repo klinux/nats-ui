@@ -52,16 +52,25 @@ export interface PulledMessage {
   headers?: Record<string, string>;
 }
 
+/**
+ * Pulls the next messages from a consumer.
+ *
+ * Non-destructive by default: the backend naks browsed messages so they stay
+ * available. Pass `ack` to actually consume them.
+ */
 export async function fetchNextMessages(
   stream: string,
   consumer: string,
   batch = 1,
+  ack = false,
 ): Promise<PulledMessage[]> {
   const token = getToken();
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const url = `${API_BASE}/api/streams/${encodeURIComponent(stream)}/consumers/${encodeURIComponent(consumer)}/next?batch=${batch}`;
+  const query = new URLSearchParams({ batch: String(batch) });
+  if (ack) query.set('ack', 'true');
+  const url = `${API_BASE}/api/streams/${encodeURIComponent(stream)}/consumers/${encodeURIComponent(consumer)}/next?${query}`;
   const response = await fetch(url, { method: 'POST', headers });
   if (!response.ok) {
     const body = await response.json().catch(() => ({ error: response.statusText }));
