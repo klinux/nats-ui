@@ -69,7 +69,7 @@ export function CreateBucketDialog({
               {...form.register('name')}
             />
             {form.formState.errors.name && (
-              <p className="text-sm text-red-600">
+              <p className="text-sm text-destructive">
                 {form.formState.errors.name.message}
               </p>
             )}

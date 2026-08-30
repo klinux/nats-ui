@@ -122,7 +122,7 @@ export function EditKeyDialog({
               disabled={isEditMode}
             />
             {form.formState.errors.key && (
-              <p className="text-sm text-red-600">
+              <p className="text-sm text-destructive">
                 {form.formState.errors.key.message}
               </p>
             )}
@@ -137,7 +137,7 @@ export function EditKeyDialog({
               {...form.register('value')}
             />
             {form.formState.errors.value && (
-              <p className="text-sm text-red-600">
+              <p className="text-sm text-destructive">
                 {form.formState.errors.value.message}
               </p>
             )}

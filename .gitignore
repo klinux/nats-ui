@@ -37,3 +37,7 @@ backend/server
 .dev-logs/
 .pid-*
 
+
+# Design canvas working files (the canvas itself lives as a published artifact)
+.design/
+.playwright-mcp/

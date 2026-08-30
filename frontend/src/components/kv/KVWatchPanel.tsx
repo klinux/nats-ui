@@ -24,12 +24,12 @@ interface KVWatchPanelProps {
 function getOperationBadge(op: string) {
   switch (op?.toUpperCase()) {
     case 'PUT':
-      return <Badge className="bg-green-500 text-white text-[10px]">PUT</Badge>;
+      return <Badge className="bg-state-ok text-background text-[10px]">PUT</Badge>;
     case 'DEL':
     case 'DELETE':
-      return <Badge className="bg-red-500 text-white text-[10px]">DEL</Badge>;
+      return <Badge className="bg-state-crit text-background text-[10px]">DEL</Badge>;
     case 'PURGE':
-      return <Badge className="bg-orange-500 text-white text-[10px]">PURGE</Badge>;
+      return <Badge className="bg-state-warn text-background text-[10px]">PURGE</Badge>;
     default:
       return <Badge variant="secondary" className="text-[10px]">{op}</Badge>;
   }

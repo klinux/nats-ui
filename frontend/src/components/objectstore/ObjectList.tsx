@@ -148,7 +148,7 @@ export function ObjectList({
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="text-red-600 hover:text-red-700"
+                          className="text-destructive hover:text-destructive/80"
                           onClick={() => setDeleteTarget(obj.name)}
                           title="Delete"
                         >
@@ -184,7 +184,7 @@ export function ObjectList({
               Cancel
             </Button>
             <Button
-              className="bg-red-600 text-white hover:bg-red-700"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
                 if (deleteTarget) onDelete(deleteTarget);
                 setDeleteTarget(null);

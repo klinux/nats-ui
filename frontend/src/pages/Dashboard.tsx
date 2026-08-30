@@ -1,11 +1,10 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
   Activity,
   MessageSquare,
   Users,
   TrendingUp,
-  Zap,
   Clock,
 } from 'lucide-react';
 
@@ -15,10 +14,15 @@ import { useNats } from '../hooks/useNats';
 import { fetchNatsInfo, fetchNatsConnections, fetchJetStreamInfo } from '../services/nats-service';
 import { MetricCardSkeleton } from '../components/ui/skeletons';
 import { formatBytes, parseUptimeToSeconds, formatUptimeFromSeconds } from '../lib/format';
-import { staggerContainer, easings } from '../lib/animations';
+import { easings } from '../lib/animations';
 import { MetricCard } from '../components/dashboard/MetricCard';
+import { ThroughputHero } from '../components/dashboard/ThroughputHero';
+import { pushSample, rates, type Sample } from '../lib/series';
 import { ServerInfo } from '../components/dashboard/ServerInfo';
 import { DisconnectedView } from '../components/dashboard/DisconnectedView';
+
+/** How many polls the throughput sparkline remembers (~2.5 min at 5s). */
+const MAX_SAMPLES = 30;
 
 export default function Dashboard() {
   const { isConnected, status, error } = useNats();
@@ -34,6 +38,8 @@ export default function Dashboard() {
   const [uptimeOffset, setUptimeOffset] = useState<number>(0);
   const [lastFetchTime, setLastFetchTime] = useState<number>(Date.now());
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
+  // in_msgs is cumulative, so throughput has to come from consecutive polls.
+  const [msgSamples, setMsgSamples] = useState<Sample[]>([]);
 
   // Fetch real NATS metrics
   const fetchMetrics = useCallback(async () => {
@@ -55,6 +61,11 @@ export default function Dashboard() {
       setServerInfo(info);
       setConnections(conns);
       setJetStreamInfo(js);
+
+      if (typeof info?.in_msgs === 'number') {
+        const inMsgs = info.in_msgs;
+        setMsgSamples((prev) => pushSample(prev, { t: Date.now(), value: inMsgs }, MAX_SAMPLES));
+      }
 
       // Update the uptime reference point
       if (info?.uptime && typeof info.uptime === 'string') {
@@ -106,6 +117,9 @@ export default function Dashboard() {
     return formatUptimeFromSeconds(currentUptimeSeconds);
   };
 
+  const rateHistory = useMemo(() => rates(msgSamples), [msgSamples]);
+  const rate = rateHistory.length > 0 ? rateHistory[rateHistory.length - 1] : 0;
+
   // Calculate metrics from real data
   const metrics = {
     connections: Array.isArray((connections as Record<string, unknown>)?.connections)
@@ -135,22 +149,19 @@ export default function Dashboard() {
       {/* Connection Status */}
       <ConnectionStatusCard status={status} error={error} />
 
-      {/* Metrics Grid */}
-      <motion.div
-        className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
-        variants={staggerContainer}
-        initial="hidden"
-        animate="visible"
-      >
-        {initialLoading && loading ? (
-          <>
-            <MetricCardSkeleton />
-            <MetricCardSkeleton />
-            <MetricCardSkeleton />
-            <MetricCardSkeleton />
-          </>
-        ) : (
-          <>
+      {/* Throughput leads; the rest is context for it. */}
+      {initialLoading && loading ? (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <MetricCardSkeleton />
+          <MetricCardSkeleton />
+          <MetricCardSkeleton />
+          <MetricCardSkeleton />
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <ThroughputHero rate={rate} history={rateHistory} total={metrics.messages} />
+
+          <div className="grid gap-4 md:grid-cols-3">
             <MetricCard
               title="Active Connections"
               value={metrics.connections}
@@ -164,20 +175,14 @@ export default function Dashboard() {
               icon={<MessageSquare className="h-4 w-4 text-muted-foreground" />}
             />
             <MetricCard
-              title="Messages Processed"
-              value={metrics.messages}
-              description="Total messages processed"
-              icon={<Zap className="h-4 w-4 text-muted-foreground" />}
-            />
-            <MetricCard
               title="Uptime"
               value={metrics.uptime}
               description="Server uptime"
               icon={<Clock className="h-4 w-4 text-muted-foreground" />}
             />
-          </>
-        )}
-      </motion.div>
+          </div>
+        </div>
+      )}
 
       {/* Data Transfer */}
       <div className="grid gap-4 md:grid-cols-2">

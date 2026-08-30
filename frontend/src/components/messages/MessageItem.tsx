@@ -118,7 +118,7 @@ export const MessageItem = memo(function MessageItem({
             <div className="mt-1.5 text-xs bg-muted p-2 rounded font-mono space-y-0.5">
               {Object.entries(message.headers!).map(([key, value]) => (
                 <div key={key} className="flex gap-2">
-                  <span className="text-blue-600 dark:text-blue-400">{key}:</span>
+                  <span className="text-syntax-key">{key}:</span>
                   <span className="text-muted-foreground">{value}</span>
                 </div>
               ))}

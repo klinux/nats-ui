@@ -48,7 +48,7 @@ export function StreamDetail({ stream, onClose, onRefresh }: StreamDetailProps) 
             <GitBranch className="h-5 w-5" />
             Stream: {stream.name}
             {stream.sealed && (
-              <Badge className="bg-orange-500 text-white">
+              <Badge className="bg-state-warn text-background">
                 <Lock className="h-3 w-3 mr-1" /> Sealed
               </Badge>
             )}
@@ -175,7 +175,7 @@ export function StreamDetail({ stream, onClose, onRefresh }: StreamDetailProps) 
             <Button
               onClick={handleSeal}
               disabled={sealing}
-              className="bg-orange-600 text-white hover:bg-orange-700"
+              className="bg-state-warn text-background hover:bg-state-warn/90"
             >
               {sealing ? 'Sealing...' : 'Seal Stream'}
             </Button>

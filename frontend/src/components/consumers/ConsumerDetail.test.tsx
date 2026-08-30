@@ -45,7 +45,7 @@ function renderDetail() {
       consumer={CONSUMER}
       onClose={vi.fn()}
       onRefresh={vi.fn()}
-      getActivityStatus={() => ({ status: 'active', color: 'bg-green-500' })}
+      getActivityStatus={() => ({ status: 'active', color: 'bg-state-ok' })}
     />,
   );
 }

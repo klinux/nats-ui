@@ -39,13 +39,13 @@ const JsonNode = memo(function JsonNode({ keyName, value, depth = 0, defaultExpa
         {/* Add space for missing chevron icon to maintain alignment */}
         <div className="w-5 mr-1" />
         {keyName && (
-          <span className="text-blue-600 dark:text-blue-400 mr-2">"{keyName}":</span>
+          <span className="text-syntax-key mr-2">"{keyName}":</span>
         )}
         <span className={cn(
-          typeof value === 'string' && 'text-green-600 dark:text-green-400',
-          typeof value === 'number' && 'text-orange-600 dark:text-orange-400',
-          typeof value === 'boolean' && 'text-purple-600 dark:text-purple-400',
-          value === null && 'text-gray-500 dark:text-gray-400'
+          typeof value === 'string' && 'text-syntax-string',
+          typeof value === 'number' && 'text-syntax-number',
+          typeof value === 'boolean' && 'text-syntax-boolean',
+          value === null && 'text-muted-foreground'
         )}>
           {typeof value === 'string' ? `"${value}"` : String(value)}
         </span>
@@ -85,7 +85,7 @@ const JsonNode = memo(function JsonNode({ keyName, value, depth = 0, defaultExpa
           {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
         </span>
         {keyName && (
-          <span className="text-blue-600 dark:text-blue-400 mr-2">"{keyName}":</span>
+          <span className="text-syntax-key mr-2">"{keyName}":</span>
         )}
         {!isExpanded && (
           <span className="text-muted-foreground">{preview}</span>

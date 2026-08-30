@@ -58,7 +58,7 @@ export function PullMessagesSection({
           </Label>
         </div>
         {ack && (
-          <p className="flex items-start gap-1.5 text-xs text-yellow-600 dark:text-yellow-500">
+          <p className="flex items-start gap-1.5 text-xs text-state-warn">
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             Fetched messages will be acknowledged and permanently removed from this consumer.
           </p>
