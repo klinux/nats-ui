@@ -15,6 +15,7 @@ import {
 } from '../ui/dialog';
 import { TableRowSkeleton } from '../ui/skeletons';
 import { formatBytes } from '../../lib/format';
+import { streamColor } from '@/lib/stream-color';
 import type { StreamInfo } from './types';
 
 interface StreamListProps {
@@ -175,7 +176,18 @@ function StreamRow({
 }: StreamRowProps) {
   return (
     <TableRow>
-      <TableCell className="font-medium">{stream.name}</TableCell>
+      <TableCell className="font-medium">
+        <div className="flex items-center gap-2.5">
+          {/* Identity colour, stable per stream name — the same hue marks this
+              stream everywhere it appears. */}
+          <span
+            className="size-2.5 shrink-0 rounded-sm"
+            style={{ background: streamColor(stream.name) }}
+            aria-hidden="true"
+          />
+          {stream.name}
+        </div>
+      </TableCell>
       <TableCell>
         <div className="flex flex-wrap gap-1">
           {stream.subjects.map((subject) => (
@@ -214,7 +226,7 @@ function StreamRow({
           }}>
             <DialogTrigger asChild>
               <Button variant="ghost" size="sm" onClick={() => setStreamToPurge(stream.name)}
-                className="text-orange-600 hover:text-orange-700" title="Purge Messages">
+                className="text-state-warn hover:text-state-warn/80" title="Purge Messages">
                 <Eraser className="h-4 w-4" />
               </Button>
             </DialogTrigger>
@@ -236,7 +248,7 @@ function StreamRow({
               <DialogFooter>
                 <Button variant="outline" onClick={() => { setStreamToPurge(null); setPurgeSubject(''); }}>Cancel</Button>
                 <Button onClick={() => onPurgeConfirm(stream.name)}
-                  className="bg-orange-600 text-white hover:bg-orange-700">
+                  className="bg-state-warn text-background hover:bg-state-warn/90">
                   {purgeSubject ? 'Purge Matching' : 'Purge All'}
                 </Button>
               </DialogFooter>
@@ -249,7 +261,7 @@ function StreamRow({
           }}>
             <DialogTrigger asChild>
               <Button variant="ghost" size="sm" onClick={() => setStreamToDelete(stream.name)}
-                className="text-red-600 hover:text-red-700">
+                className="text-destructive hover:text-destructive/80">
                 <Trash2 className="h-4 w-4" />
               </Button>
             </DialogTrigger>
@@ -263,7 +275,7 @@ function StreamRow({
               <DialogFooter>
                 <Button variant="outline" onClick={() => setStreamToDelete(null)}>Cancel</Button>
                 <Button onClick={() => { onDeleteConfirm(stream.name); setStreamToDelete(null); }}
-                  className="bg-red-600 text-white hover:bg-red-700">
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                   Delete Stream
                 </Button>
               </DialogFooter>

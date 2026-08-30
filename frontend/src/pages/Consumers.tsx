@@ -8,6 +8,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../components/ui/dialog';
 import { useNats } from '../hooks/useNats';
 import { toast } from 'sonner';
+import { lagBorderClass, lagLevel } from '../lib/lag';
+import { streamColor } from '../lib/stream-color';
+import { LagCell } from '../components/consumers/LagCell';
 import { TableRowSkeleton } from '../components/ui/skeletons';
 import { ConsumerDetail } from '../components/consumers/ConsumerDetail';
 import { CreateConsumerDialog } from '../components/consumers/CreateConsumerDialog';
@@ -40,15 +43,9 @@ function convertJetStreamConsumer(jsData: Record<string, unknown>): Consumer {
 
 function getActivityStatus(lastActivity: Date) {
   const diffMinutes = (Date.now() - lastActivity.getTime()) / (1000 * 60);
-  if (diffMinutes < 5) return { status: 'active', color: 'bg-green-500' };
-  if (diffMinutes < 30) return { status: 'idle', color: 'bg-yellow-500' };
-  return { status: 'stale', color: 'bg-gray-500' };
-}
-
-function lagColor(pending: number): string {
-  if (pending < 100) return 'bg-green-500';
-  if (pending <= 1000) return 'bg-yellow-500';
-  return 'bg-red-500';
+  if (diffMinutes < 5) return { status: 'active', color: 'bg-state-ok' };
+  if (diffMinutes < 30) return { status: 'idle', color: 'bg-state-warn' };
+  return { status: 'stale', color: 'bg-muted-foreground' };
 }
 
 export function Consumers() {
@@ -72,13 +69,19 @@ export function Consumers() {
       const prev = prevPendingRef.current;
       for (const c of converted) {
         const prevPending = prev.get(c.name) ?? 0;
-        if (c.pending >= 10000 && prevPending < 10000) {
-          toast.error(`Consumer "${c.name}" lag critical: ${c.pending.toLocaleString()} pending`, { duration: 8000 });
-        } else if (c.pending >= 1000 && prevPending < 1000) {
-          toast.warning(`Consumer "${c.name}" lag high: ${c.pending.toLocaleString()} pending`, { duration: 5000 });
+        const level = lagLevel(c.pending);
+        // Warn on the crossing, not on every poll while it stays bad.
+        if (level !== lagLevel(prevPending)) {
+          if (level === 'crit') {
+            toast.error(`Consumer "${c.name}" lag critical: ${c.pending.toLocaleString()} pending`, { duration: 8000 });
+          } else if (level === 'warn') {
+            toast.warning(`Consumer "${c.name}" lag high: ${c.pending.toLocaleString()} pending`, { duration: 5000 });
+          }
         }
         prev.set(c.name, c.pending);
       }
+      // Worst first: the reason to open this page is the consumer that is behind.
+      converted.sort((a, b) => b.pending - a.pending);
       setConsumers(converted);
     } catch (error) {
       console.error('Failed to fetch consumers:', error);
@@ -190,17 +193,29 @@ export function Consumers() {
                   {consumers.map((consumer) => {
                     const activity = getActivityStatus(consumer.lastActivity);
                     return (
-                      <TableRow key={consumer.name}>
+                      <TableRow
+                        key={consumer.name}
+                        className={consumer.paused ? 'border-l-2 border-l-muted-foreground/40' : `border-l-2 ${lagBorderClass(consumer.pending)}`}
+                      >
                         <TableCell className="font-medium">{consumer.name}</TableCell>
-                        <TableCell><Badge variant="outline">{consumer.stream}</Badge></TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="gap-1.5">
+                            <span
+                              className="size-2 rounded-sm"
+                              style={{ background: streamColor(consumer.stream) }}
+                              aria-hidden="true"
+                            />
+                            {consumer.stream}
+                          </Badge>
+                        </TableCell>
                         <TableCell>{consumer.subject}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
                             {consumer.paused ? (
-                              <Badge className="bg-yellow-500 text-white">Paused</Badge>
+                              <Badge className="bg-state-warn text-background">Paused</Badge>
                             ) : (
                               <>
-                                <div className={`w-2 h-2 rounded-full ${consumer.isActive ? activity.color : 'bg-red-500'}`} />
+                                <div className={`w-2 h-2 rounded-full ${consumer.isActive ? activity.color : 'bg-state-crit'}`} />
                                 <Badge variant={consumer.isActive ? 'default' : 'secondary'}>{consumer.isActive ? 'Active' : 'Stopped'}</Badge>
                               </>
                             )}
@@ -208,13 +223,10 @@ export function Consumers() {
                         </TableCell>
                         <TableCell>{consumer.delivered.toLocaleString()}</TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2">
-                            <div className={`w-2 h-2 rounded-full ${lagColor(consumer.pending)}`} />
-                            <span className={consumer.pending > 0 ? 'text-yellow-600 font-medium' : ''}>{consumer.pending.toLocaleString()}</span>
-                          </div>
+                          <LagCell pending={consumer.pending} />
                         </TableCell>
                         <TableCell>
-                          <span className={consumer.redelivered > 0 ? 'text-red-600 font-medium' : ''}>{consumer.redelivered.toLocaleString()}</span>
+                          <span className={consumer.redelivered > 0 ? 'text-destructive font-medium' : ''}>{consumer.redelivered.toLocaleString()}</span>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">{consumer.lastActivity.toLocaleString()}</TableCell>
                         <TableCell>
@@ -262,7 +274,7 @@ function DeleteConsumerButton({ consumer, consumerToDelete, onRequestDelete, onC
     <Dialog open={consumerToDelete?.name === consumer.name} onOpenChange={(open) => { if (!open) onRequestDelete(null); }}>
       <DialogTrigger asChild>
         <Button variant="ghost" size="sm" onClick={() => onRequestDelete({ name: consumer.name, stream: consumer.stream })}
-          className="text-red-600 hover:text-red-700"><Trash2 className="h-4 w-4" /></Button>
+          className="text-destructive hover:text-destructive/80"><Trash2 className="h-4 w-4" /></Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
@@ -274,7 +286,7 @@ function DeleteConsumerButton({ consumer, consumerToDelete, onRequestDelete, onC
         <DialogFooter>
           <Button variant="outline" onClick={() => onRequestDelete(null)}>Cancel</Button>
           <Button onClick={() => { onConfirmDelete(consumer.name, consumer.stream); onRequestDelete(null); }}
-            className="bg-red-600 text-white hover:bg-red-700">Delete Consumer</Button>
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete Consumer</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -9,6 +9,7 @@ import { PullMessagesSection } from './PullMessagesSection';
 import { toast } from 'sonner';
 import { pauseConsumer, resumeConsumer } from '../../services/api-client';
 import { fetchNextMessages, type PulledMessage } from '../../services/api-client-extended';
+import { lagBadgeVariant, lagDotClass, lagLabel as describeLag } from '../../lib/lag';
 
 export interface Consumer {
   name: string;
@@ -34,24 +35,6 @@ interface ConsumerDetailProps {
   onClose: () => void;
   onRefresh: () => void;
   getActivityStatus: (lastActivity: Date) => { status: string; color: string };
-}
-
-function getLagColor(pending: number): string {
-  if (pending < 100) return 'bg-green-500';
-  if (pending <= 1000) return 'bg-yellow-500';
-  return 'bg-red-500';
-}
-
-function getLagLabel(pending: number): string {
-  if (pending < 100) return 'Healthy';
-  if (pending <= 1000) return 'Behind';
-  return 'Critical';
-}
-
-function getLagBadgeVariant(pending: number): 'default' | 'secondary' | 'destructive' {
-  if (pending < 100) return 'default';
-  if (pending <= 1000) return 'secondary';
-  return 'destructive';
 }
 
 export function ConsumerDetail({ consumer, onClose, onRefresh, getActivityStatus }: ConsumerDetailProps) {
@@ -103,8 +86,8 @@ export function ConsumerDetail({ consumer, onClose, onRefresh, getActivityStatus
   }, [consumer.stream, consumer.name, batchSize, ackOnPull]);
 
   const activity = getActivityStatus(consumer.lastActivity);
-  const lagColor = getLagColor(consumer.pending);
-  const lagLabel = getLagLabel(consumer.pending);
+  const lagColor = lagDotClass(consumer.pending);
+  const lagLabel = describeLag(consumer.pending);
 
   return (
     <Sheet open onOpenChange={() => onClose()}>
@@ -116,9 +99,9 @@ export function ConsumerDetail({ consumer, onClose, onRefresh, getActivityStatus
           <SheetTitle className="flex min-w-0 items-center gap-2 pr-6">
             <Users className="h-5 w-5 shrink-0" />
             {consumer.paused ? (
-              <Badge className="bg-yellow-500 text-white shrink-0">Paused</Badge>
+              <Badge className="bg-state-warn text-background shrink-0">Paused</Badge>
             ) : (
-              <Badge className="bg-green-500 text-white shrink-0">Active</Badge>
+              <Badge className="bg-state-ok text-background shrink-0">Active</Badge>
             )}
             <span className="min-w-0 flex-1 truncate" title={consumer.name}>Consumer: {consumer.name}</span>
           </SheetTitle>
@@ -168,8 +151,8 @@ function MetricsGrid({ consumer }: { consumer: Consumer }) {
     <div className="grid grid-cols-5 gap-3">
       <MetricCard label="Delivered" value={consumer.delivered} />
       <MetricCard label="Acknowledged" value={consumer.acknowledged} />
-      <MetricCard label="Pending" value={consumer.pending} className="text-yellow-600" />
-      <MetricCard label="Redelivered" value={consumer.redelivered} className="text-red-600" />
+      <MetricCard label="Pending" value={consumer.pending} className="text-state-warn" />
+      <MetricCard label="Redelivered" value={consumer.redelivered} className="text-destructive" />
       <MetricCard label="Waiting" value={consumer.numWaiting} />
     </div>
   );
@@ -180,7 +163,7 @@ function LagIndicator({ lagColor, lagLabel, pending }: { lagColor: string; lagLa
     <div className="flex items-center gap-3 p-3 rounded-lg border">
       <div className={`w-3 h-3 rounded-full ${lagColor}`} />
       <span className="text-sm font-medium">Consumer Lag:</span>
-      <Badge variant={getLagBadgeVariant(pending)}>{lagLabel}</Badge>
+      <Badge variant={lagBadgeVariant(pending)}>{lagLabel}</Badge>
       <span className="text-sm text-muted-foreground ml-auto">
         {pending.toLocaleString()} pending messages
       </span>
@@ -221,7 +204,7 @@ function ConfigAndTimestamps({ consumer, activity }: { consumer: Consumer; activ
             label="Status"
             value={
               <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${consumer.isActive ? activity.color : 'bg-red-500'}`} />
+                <div className={`w-2 h-2 rounded-full ${consumer.isActive ? activity.color : 'bg-state-crit'}`} />
                 <span className="text-sm">{consumer.isActive ? 'Active' : 'Stopped'}</span>
               </div>
             }
