@@ -13,7 +13,8 @@ COPY frontend/ .
 RUN APP_VERSION=${APP_VERSION} pnpm build
 
 # Stage 2: Build Go backend
-FROM golang:1.25-alpine AS backend-builder
+# Keep in step with the go directive in backend/go.mod, which CI reads too.
+FROM golang:1.26-alpine AS backend-builder
 WORKDIR /app/backend
 COPY backend/go.mod backend/go.sum ./
 RUN go mod download
