@@ -5,6 +5,8 @@
  * Re-exports everything from the base api-client for convenience.
  */
 
+import { openEventStream } from './event-stream';
+
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
 function getToken(): string | null {
@@ -74,17 +76,9 @@ export function watchKVBucket(
   key: string,
   onEvent: (data: unknown) => void,
 ): () => void {
-  const token = getToken();
-  const url = `${API_BASE}/api/kv/${encodeURIComponent(bucket)}/watch?key=${encodeURIComponent(key)}`;
-  const es = new EventSource(url + (token ? `&token=${token}` : ''));
-  es.onmessage = (e) => {
-    try {
-      onEvent(JSON.parse(e.data));
-    } catch (err) {
-      console.error('Failed to parse KV watch event:', err);
-    }
-  };
-  return () => es.close();
+  return openEventStream(`/kv/${encodeURIComponent(bucket)}/watch`, { key }, {
+    onMessage: onEvent,
+  });
 }
 
 // System events (SSE)
@@ -97,17 +91,7 @@ export interface SystemEvent {
 export function subscribeSystemEvents(
   onEvent: (data: SystemEvent) => void,
 ): () => void {
-  const token = getToken();
-  const url = `${API_BASE}/api/server/events`;
-  const es = new EventSource(url + (token ? `?token=${token}` : ''));
-  es.onmessage = (e) => {
-    try {
-      onEvent(JSON.parse(e.data));
-    } catch (err) {
-      console.error('Failed to parse system event:', err);
-    }
-  };
-  return () => es.close();
+  return openEventStream<SystemEvent>('/server/events', {}, { onMessage: onEvent });
 }
 
 // Benchmark
