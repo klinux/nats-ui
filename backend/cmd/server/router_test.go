@@ -309,3 +309,25 @@ func TestNoRouteWithoutFrontend(t *testing.T) {
 		t.Errorf("unknown path returned %d, want 404", resp.StatusCode)
 	}
 }
+
+// TestSSEHeadersArriveBeforeAnyEvent: response headers used to flush only with
+// the first event, so EventSource's onopen could sit unfired for the full
+// 30-second keepalive interval on a quiet subject.
+func TestSSEHeadersArriveBeforeAnyEvent(t *testing.T) {
+	srv, auth, _ := testServer(t)
+	ticket := mintTicket(t, srv, auth)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Nothing is ever published on this subject.
+	resp := get(t, ctx, srv.URL+"/api/messages/subscribe?subject=silent.subject&ticket="+ticket)
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("silent stream returned %d, want 200", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/event-stream") {
+		t.Errorf("got Content-Type %q, want text/event-stream", ct)
+	}
+}

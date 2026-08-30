@@ -8,7 +8,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../components/ui/dialog';
 import { useNats } from '../hooks/useNats';
 import { toast } from 'sonner';
-import { fetchAllConsumers } from '../services/nats-service';
 import { TableRowSkeleton } from '../components/ui/skeletons';
 import { ConsumerDetail } from '../components/consumers/ConsumerDetail';
 import { CreateConsumerDialog } from '../components/consumers/CreateConsumerDialog';
@@ -65,20 +64,9 @@ export function Consumers() {
   const fetchConsumers = useCallback(async () => {
     if (!isConnected || !connection) return;
     try {
-      let data: Record<string, unknown>[] = [];
-      try {
-        const streams = await connection.jetstream.listStreams();
-        for (const stream of streams) {
-          const name = (stream.config as Record<string, unknown> | undefined)?.name as string || stream.name as string;
-          if (name) {
-            const sc = await connection.jetstream.listConsumers(name);
-            data.push(...sc.map((c: Record<string, unknown>) => ({ ...c, stream_name: name })));
-          }
-        }
-      } catch {
-        console.warn('JetStream API not available, using HTTP monitoring API');
-        data = await fetchAllConsumers();
-      }
+      // One aggregated request: walking streams here meant N+1 sequential
+      // calls every 10 seconds, enough on its own to hit the rate limit.
+      const data = await connection.jetstream.listAllConsumers();
       const converted = data.map(convertJetStreamConsumer);
       // Check lag thresholds and notify
       const prev = prevPendingRef.current;

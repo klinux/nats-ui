@@ -168,6 +168,16 @@ export interface ConsumerInfo {
   created: string;
 }
 
+/**
+ * Lists every consumer across all streams in a single request.
+ *
+ * Walking streams client-side meant N+1 sequential calls on every poll, which
+ * on its own tripped the server's per-IP rate limit.
+ */
+export async function listAllConsumers(): Promise<ConsumerInfo[]> {
+  return request('/consumers');
+}
+
 export async function listConsumers(streamName: string): Promise<ConsumerInfo[]> {
   return request(`/streams/${streamName}/consumers`);
 }

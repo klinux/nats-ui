@@ -115,6 +115,7 @@ func newRouter(
 		protected.GET("/streams/:name/messages", validateName, streamsH.GetMessages)
 
 		// Consumers
+		protected.GET("/consumers", consumersH.ListAll)
 		protected.GET("/streams/:name/consumers", validateName, consumersH.List)
 		protected.POST("/streams/:name/consumers", validateName, consumersH.Create)
 		protected.GET("/streams/:name/consumers/:consumer", validateName, validateConsumer, consumersH.Get)

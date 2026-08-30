@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -141,9 +142,14 @@ func (h *StreamsHandler) GetMessages(c *gin.Context) {
 		})
 	}
 
-	if msgs.Error() != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("fetch error: %v", msgs.Error())})
-		return
+	if err := msgs.Error(); err != nil {
+		// Discarding messages that were already read would turn a transient
+		// blip into an empty message browser.
+		if len(messages) == 0 {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("fetch error: %v", err)})
+			return
+		}
+		log.Printf("streams: partial fetch from %q after %d messages: %v", name, len(messages), err)
 	}
 
 	c.JSON(http.StatusOK, messages)

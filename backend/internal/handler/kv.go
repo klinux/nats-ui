@@ -2,9 +2,8 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"time"
 
@@ -220,8 +219,9 @@ func (h *KVHandler) WatchKeys(c *gin.Context) {
 	bucket := c.Param("bucket")
 	key := c.DefaultQuery("key", ">")
 
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Minute)
-	defer cancel()
+	// Scoped to the request: the watch lives for as long as the client is
+	// connected, so no arbitrary deadline is imposed on it.
+	ctx := c.Request.Context()
 
 	kv, err := h.nc.JS().KeyValue(ctx, bucket)
 	if err != nil {
@@ -234,46 +234,34 @@ func (h *KVHandler) WatchKeys(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	defer watcher.Stop()
+	defer func() {
+		if err := watcher.Stop(); err != nil {
+			log.Printf("kv: stopping watcher on %s/%s: %v", bucket, key, err)
+		}
+	}()
 
-	c.Header("Content-Type", "text/event-stream")
-	c.Header("Cache-Control", "no-cache")
-	c.Header("Connection", "keep-alive")
-	c.Header("X-Accel-Buffering", "no")
-
-	flusher, _ := c.Writer.(http.Flusher)
-
-	c.Stream(func(w io.Writer) bool {
+	streamEvents(c, func(out io.Writer, w *sseWriter, keepalive <-chan time.Time) bool {
 		select {
 		case entry := <-watcher.Updates():
+			// A nil entry marks the end of the initial replay, not a value.
 			if entry == nil {
 				return true
 			}
-			data, err := json.Marshal(gin.H{
+			w.sendJSON(out, gin.H{
 				"key":       entry.Key(),
 				"value":     string(entry.Value()),
 				"revision":  entry.Revision(),
 				"operation": entry.Operation().String(),
 				"created":   entry.Created(),
 			})
-			if err != nil {
-				fmt.Fprintf(w, "data: {\"error\":\"marshal failed\"}\n\n")
-				if flusher != nil {
-					flusher.Flush()
-				}
-				return true
-			}
-			fmt.Fprintf(w, "data: %s\n\n", data)
-			if flusher != nil {
-				flusher.Flush()
-			}
 			return true
-
-		case <-ctx.Done():
-			return false
 
 		case <-c.Request.Context().Done():
 			return false
+
+		case <-keepalive:
+			w.keepAlive(out)
+			return true
 		}
 	})
 }

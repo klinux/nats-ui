@@ -93,17 +93,7 @@ func (h *ConsumersHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusCreated, map[string]any{
-		"config":      info.Config,
-		"stream_name": streamName,
-		"name":        info.Config.Name,
-		"delivered":   info.Delivered,
-		"ack_floor":   info.AckFloor,
-		"num_pending":  info.NumPending,
-		"num_waiting":  info.NumWaiting,
-		"num_ack_pending": info.NumAckPending,
-		"created":     info.Created,
-	})
+	c.JSON(http.StatusCreated, consumerPayload(streamName, info))
 }
 
 func (h *ConsumersHandler) List(c *gin.Context) {
@@ -120,17 +110,7 @@ func (h *ConsumersHandler) List(c *gin.Context) {
 	var consumers []map[string]any
 	lister := stream.ListConsumers(ctx)
 	for info := range lister.Info() {
-		consumers = append(consumers, map[string]any{
-			"config":      info.Config,
-			"stream_name": streamName,
-			"name":        info.Config.Name,
-			"delivered":   info.Delivered,
-			"ack_floor":   info.AckFloor,
-			"num_pending":  info.NumPending,
-			"num_waiting":  info.NumWaiting,
-			"num_ack_pending": info.NumAckPending,
-			"created":     info.Created,
-		})
+		consumers = append(consumers, consumerPayload(streamName, info))
 	}
 	if lister.Err() != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": lister.Err().Error()})
@@ -168,14 +148,14 @@ func (h *ConsumersHandler) Get(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, map[string]any{
-		"config":      info.Config,
-		"stream_name": streamName,
-		"delivered":   info.Delivered,
-		"ack_floor":   info.AckFloor,
-		"num_pending":  info.NumPending,
-		"num_waiting":  info.NumWaiting,
+		"config":          info.Config,
+		"stream_name":     streamName,
+		"delivered":       info.Delivered,
+		"ack_floor":       info.AckFloor,
+		"num_pending":     info.NumPending,
+		"num_waiting":     info.NumWaiting,
 		"num_ack_pending": info.NumAckPending,
-		"created":     info.Created,
+		"created":         info.Created,
 	})
 }
 
@@ -293,4 +273,19 @@ func (h *ConsumersHandler) Resume(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"paused": false})
+}
+
+// consumerPayload is the JSON shape every consumer endpoint returns.
+func consumerPayload(streamName string, info *jetstream.ConsumerInfo) map[string]any {
+	return map[string]any{
+		"config":          info.Config,
+		"stream_name":     streamName,
+		"name":            info.Config.Name,
+		"delivered":       info.Delivered,
+		"ack_floor":       info.AckFloor,
+		"num_pending":     info.NumPending,
+		"num_waiting":     info.NumWaiting,
+		"num_ack_pending": info.NumAckPending,
+		"created":         info.Created,
+	}
 }

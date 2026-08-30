@@ -1,9 +1,8 @@
 package handler
 
 import (
-	"encoding/json"
-	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"time"
 
@@ -150,44 +149,27 @@ func (h *ServerHandler) SystemEvents(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	defer sub.Unsubscribe()
+	defer func() {
+		if err := sub.Unsubscribe(); err != nil {
+			log.Printf("server: unsubscribe from %q: %v", subject, err)
+		}
+	}()
 
-	c.Header("Content-Type", "text/event-stream")
-	c.Header("Cache-Control", "no-cache")
-	c.Header("Connection", "keep-alive")
-	c.Header("X-Accel-Buffering", "no")
-
-	flusher, _ := c.Writer.(http.Flusher)
-
-	c.Stream(func(w io.Writer) bool {
+	streamEvents(c, func(out io.Writer, w *sseWriter, keepalive <-chan time.Time) bool {
 		select {
 		case msg := <-ch:
-			data, err := json.Marshal(gin.H{
+			w.sendJSON(out, gin.H{
 				"subject":   msg.Subject,
 				"data":      string(msg.Data),
 				"timestamp": time.Now().UnixMilli(),
 			})
-			if err != nil {
-				fmt.Fprintf(w, "data: {\"error\":\"marshal failed\"}\n\n")
-				if flusher != nil {
-					flusher.Flush()
-				}
-				return true
-			}
-			fmt.Fprintf(w, "data: %s\n\n", data)
-			if flusher != nil {
-				flusher.Flush()
-			}
 			return true
 
 		case <-c.Request.Context().Done():
 			return false
 
-		case <-time.After(30 * time.Second):
-			fmt.Fprintf(w, ": keepalive\n\n")
-			if flusher != nil {
-				flusher.Flush()
-			}
+		case <-keepalive:
+			w.keepAlive(out)
 			return true
 		}
 	})
