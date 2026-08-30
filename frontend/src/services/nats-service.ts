@@ -1,7 +1,6 @@
 import { toast } from 'sonner';
 import * as api from './api-client';
 import { subjectTracker } from './subject-tracker';
-import { useMessageStore } from '@/stores/message-store';
 
 // Compatibility layer: same interface as before, but uses backend API instead of nats.ws
 
@@ -26,18 +25,10 @@ class ApiNatsService implements NatsService {
     const payload = typeof data === 'string' ? data : JSON.stringify(data);
     subjectTracker.track(subject, payload);
 
-    // Optimistic: add message to store immediately if subscribed
-    const store = useMessageStore.getState();
-    if (store.isSubscribed(subject)) {
-      const msgId = `msg_${Date.now()}_${subject}_${payload.slice(0, 50)}`;
-      store.addMessage({
-        id: msgId,
-        subject,
-        data: payload,
-        headers: msgHeaders,
-        timestamp: new Date(),
-      });
-    }
+    // No optimistic insert: the backend holds the subscription, so a message
+    // published to a watched subject comes straight back over SSE. Adding it
+    // here duplicated it — the optimistic id was built from Date.now() and
+    // never matched the server timestamp the SSE copy carried.
   }
 
   async subscribe(subject: string, callback: (msg: { subject: string; data: unknown; headers?: Record<string, string>; timestamp: number; reply?: string }) => void): Promise<() => void> {

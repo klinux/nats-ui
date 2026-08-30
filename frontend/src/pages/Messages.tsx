@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { MessageSquare } from 'lucide-react';
 
 import { Card, CardContent } from '../components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { useNats } from '../hooks/useNats';
+import { filterMessages } from '../lib/message-filter';
 import { useTopics } from '../hooks/useTopics';
 import { useMessages } from '../hooks/useMessages';
 import { useTopicStore } from '../stores/topic-store';
@@ -34,10 +35,10 @@ export function Messages() {
   } = useTopics({ isConnected });
 
   const {
+    messages,
     isSubscribed,
     toggleSubscription,
     clearMessages,
-    getFilteredMessages,
     exportMessages,
   } = useMessages(connection);
 
@@ -54,6 +55,12 @@ export function Messages() {
     setSelectedTopic(name);
   };
 
+  // Memoised: this walks up to 1000 messages and was re-running on every render.
+  const filteredMessages = useMemo(
+    () => (selectedTopic ? filterMessages(messages, selectedTopic) : []),
+    [messages, selectedTopic],
+  );
+
   if (!isConnected) {
     return (
       <div className="space-y-4 p-4">
@@ -67,7 +74,7 @@ export function Messages() {
     );
   }
 
-  const filteredMessages = selectedTopic ? getFilteredMessages(selectedTopic) : [];
+
 
   return (
     <div className="h-full flex flex-col p-4">

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
   Activity,
@@ -27,6 +27,10 @@ export default function Dashboard() {
   const [jetStreamInfo, setJetStreamInfo] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
+  // Read through a ref so fetchMetrics stays stable: depending on the state
+  // directly rebuilt the callback, which tore down and recreated the polling
+  // interval on the very first fetch.
+  const initialLoadingRef = useRef(true);
   const [uptimeOffset, setUptimeOffset] = useState<number>(0);
   const [lastFetchTime, setLastFetchTime] = useState<number>(Date.now());
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
@@ -36,7 +40,8 @@ export default function Dashboard() {
     if (!isConnected) return;
 
     // Only show loading on initial load
-    if (initialLoading) {
+    const isInitial = initialLoadingRef.current;
+    if (isInitial) {
       setLoading(true);
     }
 
@@ -57,17 +62,18 @@ export default function Dashboard() {
         setLastFetchTime(Date.now());
       }
 
-      if (initialLoading) {
+      if (isInitial) {
+        initialLoadingRef.current = false;
         setInitialLoading(false);
       }
     } catch (error) {
       console.error('Failed to fetch NATS metrics:', error);
     } finally {
-      if (initialLoading) {
+      if (isInitial) {
         setLoading(false);
       }
     }
-  }, [isConnected, initialLoading]);
+  }, [isConnected]);
 
   useEffect(() => {
     fetchMetrics();
