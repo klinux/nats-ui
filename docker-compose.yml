@@ -33,6 +33,12 @@ services:
       ADMIN_USER: ${ADMIN_USER:-admin}
       ADMIN_PASS: ${ADMIN_PASS:-admin}
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      # This compose file ships development defaults; the backend refuses to
+      # start with them otherwise. Set real values and drop this line for any
+      # deployment that is not local.
+      ALLOW_INSECURE_DEFAULTS: ${ALLOW_INSECURE_DEFAULTS:-true}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      MAX_UPLOAD_SIZE: ${MAX_UPLOAD_SIZE:-}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}

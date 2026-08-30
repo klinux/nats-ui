@@ -1,6 +1,8 @@
 package main
 
 import (
+	"log"
+	"net/http"
 	"os"
 	"strconv"
 
@@ -12,6 +14,9 @@ import (
 	"nats-ui-backend/internal/middleware"
 	natsclient "nats-ui-backend/internal/nats"
 )
+
+// defaultRateLimitRPS is the per-IP request rate used when none is configured.
+const defaultRateLimitRPS = 20
 
 // newRouter wires every HTTP route. It is kept separate from main so the route
 // table (auth groups in particular) can be exercised in tests.
@@ -35,6 +40,15 @@ func newRouter(
 	}
 	r := gin.Default()
 
+	// Trust no proxy by default: gin otherwise honours X-Forwarded-For from
+	// anyone, letting a client fake its IP and bypass the rate limiter.
+	if err := r.SetTrustedProxies(cfg.TrustedProxiesList()); err != nil {
+		log.Printf("router: invalid TRUSTED_PROXIES, trusting none: %v", err)
+		if err := r.SetTrustedProxies(nil); err != nil {
+			log.Printf("router: failed to clear trusted proxies: %v", err)
+		}
+	}
+
 	// CORS
 	origins := cfg.CORSOriginsList()
 	allowCredentials := origins[0] != "*"
@@ -46,9 +60,12 @@ func newRouter(
 	}))
 
 	// Rate limiting
-	rps, _ := strconv.ParseFloat(cfg.RateLimitRPS, 64)
-	if rps <= 0 {
-		rps = 20
+	rps, err := strconv.ParseFloat(cfg.RateLimitRPS, 64)
+	if err != nil || rps <= 0 {
+		if cfg.RateLimitRPS != "" && err != nil {
+			log.Printf("router: invalid RATE_LIMIT_RPS %q, falling back to %d", cfg.RateLimitRPS, defaultRateLimitRPS)
+		}
+		rps = defaultRateLimitRPS
 	}
 	r.Use(middleware.RateLimit(rps))
 
@@ -151,7 +168,11 @@ func newRouter(
 	r.NoRoute(func(c *gin.Context) {
 		if _, err := os.Stat("./static/index.html"); err == nil {
 			c.File("./static/index.html")
+			return
 		}
+		// Without a built frontend there is nothing to fall back to; saying so
+		// beats answering 200 with an empty body.
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 	})
 
 	return r

@@ -1,9 +1,11 @@
 package handler
 
 import (
-	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"time"
 
@@ -13,12 +15,20 @@ import (
 	natsclient "nats-ui-backend/internal/nats"
 )
 
+// sniffLen is the number of bytes http.DetectContentType inspects.
+const sniffLen = 512
+
+// objectTransferTimeout covers a full object upload or download. The 10s used
+// for metadata calls is far too short to move a large object.
+const objectTransferTimeout = 5 * time.Minute
+
 type ObjectStoreHandler struct {
-	nc *natsclient.Client
+	nc             *natsclient.Client
+	maxUploadBytes int64
 }
 
-func NewObjectStoreHandler(nc *natsclient.Client) *ObjectStoreHandler {
-	return &ObjectStoreHandler{nc: nc}
+func NewObjectStoreHandler(nc *natsclient.Client, maxUploadBytes int64) *ObjectStoreHandler {
+	return &ObjectStoreHandler{nc: nc, maxUploadBytes: maxUploadBytes}
 }
 
 func (h *ObjectStoreHandler) ListBuckets(c *gin.Context) {
@@ -179,7 +189,7 @@ func (h *ObjectStoreHandler) ListObjects(c *gin.Context) {
 }
 
 func (h *ObjectStoreHandler) GetObject(c *gin.Context) {
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), objectTransferTimeout)
 	defer cancel()
 
 	bucket := c.Param("bucket")
@@ -196,20 +206,38 @@ func (h *ObjectStoreHandler) GetObject(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
-	defer result.Close()
+	defer func() {
+		if err := result.Close(); err != nil {
+			log.Printf("objectstore: closing %s/%s: %v", bucket, name, err)
+		}
+	}()
 
-	data, err := io.ReadAll(result)
-	if err != nil {
+	// Sniff the content type from the leading bytes, then stream the rest —
+	// buffering the whole object just to detect its type put every download's
+	// full size in memory.
+	head := make([]byte, sniffLen)
+	n, err := io.ReadFull(result, head)
+	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	head = head[:n]
 
-	contentType := http.DetectContentType(data)
-	c.Data(http.StatusOK, contentType, data)
+	c.Header("Content-Type", http.DetectContentType(head))
+	c.Status(http.StatusOK)
+
+	if _, err := c.Writer.Write(head); err != nil {
+		log.Printf("objectstore: writing %s/%s: %v", bucket, name, err)
+		return
+	}
+	if _, err := io.Copy(c.Writer, result); err != nil {
+		// Headers are already sent, so the status cannot be changed here.
+		log.Printf("objectstore: streaming %s/%s: %v", bucket, name, err)
+	}
 }
 
 func (h *ObjectStoreHandler) PutObject(c *gin.Context) {
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), objectTransferTimeout)
 	defer cancel()
 
 	bucket := c.Param("bucket")
@@ -221,14 +249,24 @@ func (h *ObjectStoreHandler) PutObject(c *gin.Context) {
 		return
 	}
 
-	data, err := io.ReadAll(c.Request.Body)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+	// Stream the body straight into the store, capped: the previous io.ReadAll
+	// held the entire upload in memory with no ceiling at all.
+	body := http.MaxBytesReader(c.Writer, c.Request.Body, h.maxUploadBytes)
+	defer func() {
+		if err := body.Close(); err != nil {
+			log.Printf("objectstore: closing upload body for %s/%s: %v", bucket, name, err)
+		}
+	}()
 
-	info, err := store.Put(ctx, jetstream.ObjectMeta{Name: name}, bytes.NewReader(data))
+	info, err := store.Put(ctx, jetstream.ObjectMeta{Name: name}, body)
 	if err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{
+				"error": fmt.Sprintf("upload exceeds the %d byte limit", h.maxUploadBytes),
+			})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

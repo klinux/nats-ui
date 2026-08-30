@@ -4,9 +4,11 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -25,6 +27,12 @@ import (
 // not implement CloseNotifier), so tests drive an actual HTTP server.
 func testServer(t *testing.T) (*httptest.Server, *middleware.AuthMiddleware, *natsclient.Client) {
 	t.Helper()
+	// 1000 rps keeps the limiter out of the way of the other tests.
+	return testServerWithConfig(t, "1000")
+}
+
+func testServerWithConfig(t *testing.T, rateLimitRPS string) (*httptest.Server, *middleware.AuthMiddleware, *natsclient.Client) {
+	t.Helper()
 	gin.SetMode(gin.TestMode)
 
 	nc := testutil.StartNATS(t)
@@ -33,7 +41,7 @@ func testServer(t *testing.T) (*httptest.Server, *middleware.AuthMiddleware, *na
 		AdminUser:    "admin",
 		AdminPass:    "pw",
 		CORSOrigins:  "*",
-		RateLimitRPS: "1000", // keep the limiter out of the way of these tests
+		RateLimitRPS: rateLimitRPS,
 	}
 	auth := middleware.NewAuthMiddleware(cfg.JWTSecret)
 
@@ -44,7 +52,7 @@ func testServer(t *testing.T) (*httptest.Server, *middleware.AuthMiddleware, *na
 		handler.NewStreamsHandler(nc),
 		handler.NewConsumersHandler(nc),
 		handler.NewKVHandler(nc),
-		handler.NewObjectStoreHandler(nc),
+		handler.NewObjectStoreHandler(nc, cfg.MaxUploadBytes()),
 		handler.NewMessagesHandler(nc),
 		handler.NewBenchHandler(nc),
 	)
@@ -244,5 +252,60 @@ func TestHealthIsPublic(t *testing.T) {
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("public /api/health returned %d, want 200", resp.StatusCode)
+	}
+}
+
+// TestRateLimitIgnoresForwardedForSpoofing covers the bypass: gin trusts every
+// proxy by default, so ClientIP echoed an attacker-controlled X-Forwarded-For
+// and each spoofed value got its own fresh token bucket.
+func TestRateLimitIgnoresForwardedForSpoofing(t *testing.T) {
+	srv, _, _ := testServerWithConfig(t, "1")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	limited := false
+	for i := 0; i < 20; i++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/api/health", nil)
+		if err != nil {
+			t.Fatalf("build request: %v", err)
+		}
+		// A different "source" every time; the limiter must not believe it.
+		req.Header.Set("X-Forwarded-For", fmt.Sprintf("203.0.113.%d", i+1))
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("GET /api/health: %v", err)
+		}
+		if err := resp.Body.Close(); err != nil {
+			t.Fatalf("close body: %v", err)
+		}
+		if resp.StatusCode == http.StatusTooManyRequests {
+			limited = true
+			break
+		}
+	}
+
+	if !limited {
+		t.Error("spoofed X-Forwarded-For headers bypassed the rate limiter")
+	}
+}
+
+// TestNoRouteWithoutFrontend: with no built frontend there is nothing to serve,
+// which used to come back as 200 with an empty body.
+func TestNoRouteWithoutFrontend(t *testing.T) {
+	srv, _, _ := testServer(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	resp := get(t, ctx, srv.URL+"/no/such/path")
+	defer resp.Body.Close()
+
+	if _, err := os.Stat("./static/index.html"); err == nil {
+		t.Skip("a built frontend is present; the SPA fallback applies instead")
+	}
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("unknown path returned %d, want 404", resp.StatusCode)
 	}
 }
